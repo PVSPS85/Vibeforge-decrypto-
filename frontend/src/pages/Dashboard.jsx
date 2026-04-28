@@ -1,36 +1,147 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWeb3 } from '../context/Web3Context'
 
+// ═══ CONFETTI ENGINE ═══
+function launchConfetti() {
+  const colors = ['#7c3aed', '#06b6d4', '#f59e0b', '#10b981', '#ec4899', '#a855f7']
+  const shapes = ['■', '●', '▲', '★', '◆']
+  for (let i = 0; i < 80; i++) {
+    const el = document.createElement('div')
+    el.className = 'confetti-piece'
+    el.innerText = shapes[Math.floor(Math.random() * shapes.length)]
+    el.style.cssText = `
+      left: ${Math.random() * 100}vw;
+      color: ${colors[Math.floor(Math.random() * colors.length)]};
+      font-size: ${8 + Math.random() * 14}px;
+      animation-duration: ${2 + Math.random() * 3}s;
+      animation-delay: ${Math.random() * 1.5}s;
+    `
+    document.body.appendChild(el)
+    setTimeout(() => el.remove(), 5000)
+  }
+}
+
+// ═══ TOAST ENGINE ═══
+function Toast({ toasts }) {
+  return (
+    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
+      {toasts.map(t => (
+        <div
+          key={t.id}
+          className={`toast flex items-center gap-3 px-5 py-3 rounded-2xl border backdrop-blur-md shadow-2xl
+            ${t.type === 'success' ? 'bg-green-500/20 border-green-500/40 text-green-300' :
+              t.type === 'xp' ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-300' :
+              t.type === 'error' ? 'bg-red-500/20 border-red-500/40 text-red-300' :
+              'bg-vibe-purple/20 border-vibe-purple/40 text-vibe-violet'}`}
+        >
+          <span className="text-xl">{t.icon}</span>
+          <div>
+            <p className="font-semibold text-sm">{t.title}</p>
+            {t.sub && <p className="text-xs opacity-70">{t.sub}</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ═══ ANIMATED COUNTER ═══
+function AnimatedNumber({ value, prefix = '₹', decimals = 0 }) {
+  const [display, setDisplay] = useState(0)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    let start = 0
+    const end = parseFloat(value)
+    const duration = 1200
+    const step = 16
+    const increment = end / (duration / step)
+    clearInterval(ref.current)
+    ref.current = setInterval(() => {
+      start += increment
+      if (start >= end) { setDisplay(end); clearInterval(ref.current) }
+      else setDisplay(start)
+    }, step)
+    return () => clearInterval(ref.current)
+  }, [value])
+
+  return <span>{prefix}{decimals ? display.toFixed(decimals) : Math.floor(display).toLocaleString()}</span>
+}
+
+// ═══ XP BAR ═══
+function XPBar({ xp, maxXp, level }) {
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setWidth((xp / maxXp) * 100), 300)
+    return () => clearTimeout(t)
+  }, [xp, maxXp])
+
+  return (
+    <div className="glass-card p-5 mb-8 animate-border-glow">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-lg font-bold animate-pulse-slow">
+            {level}
+          </div>
+          <div>
+            <p className="font-display font-bold text-white text-sm">Level {level} — Debt Crusher</p>
+            <p className="text-xs text-gray-500">{maxXp - xp} XP to Level {level + 1}</p>
+          </div>
+        </div>
+        <p className="text-yellow-400 font-bold font-mono text-sm">
+          <AnimatedNumber value={xp} prefix="" /> / {maxXp.toLocaleString()} XP
+        </p>
+      </div>
+      <div className="h-4 rounded-full bg-vibe-border overflow-hidden relative">
+        <div
+          className="h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden"
+          style={{
+            width: `${width}%`,
+            background: 'linear-gradient(90deg, #7c3aed, #a855f7, #06b6d4)',
+          }}
+        >
+          {/* Shimmer on bar */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer-bar" />
+        </div>
+        {/* Glow dot at tip */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] transition-all duration-1000"
+          style={{ left: `calc(${width}% - 8px)` }}
+        />
+      </div>
+      <div className="flex gap-2 mt-3 flex-wrap">
+        {['⚡ Fast Payer', '🏆 Group Hero', '💸 Big Spender'].map(badge => (
+          <span key={badge} className="text-xs px-2 py-1 rounded-full bg-vibe-purple/20 border border-vibe-purple/30 text-vibe-violet">
+            {badge}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ═══ INITIAL DATA ═══
 const INITIAL_GROUPS = [
   {
-    id: '1',
-    name: 'House Squad',
-    emoji: '🏠',
-    tag: 'Home',
+    id: '1', name: 'House Squad', emoji: '🏠', tag: 'Home',
     tagColor: 'bg-purple-500/20 text-purple-300',
     members: ['AK', 'PS', 'JT', 'GW'],
     memberColors: ['bg-purple-500', 'bg-cyan-500', 'bg-yellow-500', 'bg-green-500'],
-    totalExpense: 180,
-    settled: 137.5,
-    yourBalance: -42.50,
-    memberCount: 4,
+    totalExpense: 180, settled: 137.5, yourBalance: -42.50, memberCount: 4,
   },
   {
-    id: '2',
-    name: 'Weekend Crew',
-    emoji: '🎮',
-    tag: 'Fun',
+    id: '2', name: 'Weekend Crew', emoji: '🎮', tag: 'Fun',
     tagColor: 'bg-yellow-500/20 text-yellow-300',
-    members: ['MR', 'CL', 'AK', 'DP', '+1'],
-    memberColors: ['bg-pink-500', 'bg-cyan-400', 'bg-orange-400', 'bg-red-400', 'bg-gray-500'],
-    totalExpense: 250,
-    settled: 182.8,
-    yourBalance: 67.20,
-    memberCount: 5,
+    members: ['MR', 'CL', 'AK', 'DP'],
+    memberColors: ['bg-pink-500', 'bg-cyan-400', 'bg-orange-400', 'bg-red-400'],
+    totalExpense: 250, settled: 182.8, yourBalance: 67.20, memberCount: 4,
   },
 ]
 
+const TAG_EMOJIS = { Fun: '🎮', Home: '🏠', Travel: '✈️', Food: '🍕', Work: '💼' }
+
+// ═══ MAIN COMPONENT ═══
 export default function Dashboard() {
   const { account } = useWeb3()
   const navigate = useNavigate()
@@ -38,20 +149,31 @@ export default function Dashboard() {
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [groupTag, setGroupTag] = useState('Fun')
+  const [toasts, setToasts] = useState([])
+  const [xp, setXp] = useState(2840)
+  const [mounted, setMounted] = useState(false)
 
-  const xp = 2840
   const maxXp = 3500
   const level = 7
-  const youOwe = 57.50
-  const youGetBack = 89.20
-  const netBalance = youGetBack - youOwe
+
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 100)
+    return () => clearTimeout(t)
+  }, [])
+
+  const addToast = (toast) => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { ...toast, id }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
+  }
 
   const handleCreateGroup = () => {
     if (!groupName.trim()) return
+    const emoji = TAG_EMOJIS[groupTag] || '✨'
     const newGroup = {
       id: Date.now().toString(),
       name: groupName,
-      emoji: '✨',
+      emoji,
       tag: groupTag,
       tagColor: 'bg-cyan-500/20 text-cyan-300',
       members: ['YO'],
@@ -64,108 +186,119 @@ export default function Dashboard() {
     setGroups(prev => [...prev, newGroup])
     setGroupName('')
     setShowNewGroup(false)
+    setXp(prev => prev + 100)
+    launchConfetti()
+    addToast({ type: 'success', icon: '🎉', title: 'Group Created!', sub: '+100 XP earned' })
+    setTimeout(() => addToast({ type: 'xp', icon: '⚡', title: 'XP Gained!', sub: 'Keep splitting to level up' }), 800)
   }
 
+  const youOwe = 57.50
+  const youGetBack = 89.20
+  const netBalance = youGetBack - youOwe
+
   return (
-    <div className="min-h-screen bg-vibe-bg bg-grid px-4 md:px-8 py-8 pt-24">
+    <div className={`min-h-screen bg-vibe-bg bg-grid px-4 md:px-8 py-8 pt-24 transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
       <div className="max-w-6xl mx-auto">
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
+        {/* ── Header ── */}
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8 animate-slide-up">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="font-display text-4xl font-extrabold text-white">Quest Dashboard</h1>
-              <span className="px-3 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 text-xs font-bold">
-                ⚡ Level {level}
+              <h1 className="font-display text-4xl md:text-5xl font-extrabold text-white">
+                Quest Dashboard
+              </h1>
+              <span className="px-3 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 text-xs font-bold animate-pulse-slow">
+                ⚡ Lv.{level}
               </span>
             </div>
-            <p className="text-gray-400 text-sm">Your financial adventure awaits 👋</p>
+            <p className="text-gray-400 text-sm">
+              {account
+                ? `🦊 ${account.slice(0, 6)}...${account.slice(-4)} · Your financial adventure`
+                : '👀 Demo Mode — Connect wallet to save data'}
+            </p>
           </div>
           <button
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-2 self-start"
             onClick={() => setShowNewGroup(true)}
           >
-            + Add Expense
+            <span className="text-lg">+</span> New Group
           </button>
         </div>
 
-        {/* Balance Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="glass-card p-6" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-gray-400 text-sm">You Owe</p>
-              <span className="text-red-400 text-lg">↘</span>
-            </div>
-            <p className="font-display text-3xl font-bold text-red-400">₹{youOwe.toFixed(2)}</p>
-            <p className="text-xs text-gray-500 mt-1">Across 2 groups</p>
-          </div>
-          <div className="glass-card p-6" style={{ background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.2)' }}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-gray-400 text-sm">You Get Back</p>
-              <span className="text-green-400 text-lg">↗</span>
-            </div>
-            <p className="font-display text-3xl font-bold text-green-400">₹{youGetBack.toFixed(2)}</p>
-            <p className="text-xs text-gray-500 mt-1">From 3 friends</p>
-          </div>
-          <div className="glass-card p-6" style={{ background: 'rgba(124,58,237,0.08)', borderColor: 'rgba(124,58,237,0.2)' }}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-gray-400 text-sm">Net Balance</p>
-              <span className="text-purple-400 text-lg">—</span>
-            </div>
-            <p className="font-display text-3xl font-bold text-purple-400">+₹{netBalance.toFixed(2)}</p>
-            <p className="text-xs text-gray-500 mt-1">Looking good! 🎉</p>
-          </div>
-        </div>
-
-        {/* XP Bar */}
-        <div className="glass-card p-5 mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <p className="font-display font-semibold text-white flex items-center gap-2">
-              ⚡ XP Progress — Level {level}
-            </p>
-            <p className="text-yellow-400 font-bold text-sm font-mono">{xp.toLocaleString()} / {maxXp.toLocaleString()} XP</p>
-          </div>
-          <div className="h-3 rounded-full bg-vibe-border overflow-hidden">
+        {/* ── Balance Cards ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 stagger-children">
+          {[
+            { label: 'You Owe', value: youOwe, color: 'red', icon: '📤', arrow: '↘', sub: 'Across 2 groups' },
+            { label: 'You Get Back', value: youGetBack, color: 'green', icon: '📥', arrow: '↗', sub: 'From 3 friends' },
+            { label: 'Net Balance', value: netBalance, color: 'purple', icon: '⚖️', arrow: '—', sub: 'Looking good! 🎉', prefix: '+₹' },
+          ].map((card, i) => (
             <div
-              className="h-full rounded-full transition-all duration-1000"
+              key={i}
+              className={`glass-card p-6 card-hover animate-slide-up`}
               style={{
-                width: `${(xp / maxXp) * 100}%`,
-                background: 'linear-gradient(90deg, #7c3aed, #06b6d4)'
+                animationDelay: `${i * 0.1}s`,
+                background: card.color === 'red' ? 'rgba(239,68,68,0.08)' : card.color === 'green' ? 'rgba(16,185,129,0.08)' : 'rgba(124,58,237,0.08)',
+                borderColor: card.color === 'red' ? 'rgba(239,68,68,0.25)' : card.color === 'green' ? 'rgba(16,185,129,0.25)' : 'rgba(124,58,237,0.25)',
               }}
-            />
-          </div>
-          <p className="text-xs text-gray-500 mt-2">{maxXp - xp} XP to Level {level + 1} — Keep splitting! ⚡</p>
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-gray-400 text-sm flex items-center gap-2">
+                  <span>{card.icon}</span>{card.label}
+                </p>
+                <span className={`text-lg ${card.color === 'red' ? 'text-red-400' : card.color === 'green' ? 'text-green-400' : 'text-purple-400'}`}>
+                  {card.arrow}
+                </span>
+              </div>
+              <p className={`font-display text-3xl font-bold ${card.color === 'red' ? 'text-red-400' : card.color === 'green' ? 'text-green-400' : 'text-purple-400'}`}>
+                <AnimatedNumber value={card.value} decimals={2} prefix={card.prefix || '₹'} />
+              </p>
+              <p className="text-xs text-gray-500 mt-1">{card.sub}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Groups + Leaderboard */}
+        {/* ── XP Bar ── */}
+        <XPBar xp={xp} maxXp={maxXp} level={level} />
+
+        {/* ── Groups + Leaderboard ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Groups */}
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-xl font-bold text-white">🎮 Your Groups</h2>
               <button
                 onClick={() => setShowNewGroup(true)}
-                className="text-vibe-violet text-sm hover:text-white transition-colors"
+                className="text-vibe-violet text-sm hover:text-white transition-colors flex items-center gap-1"
               >
-                New Group +
+                New Group <span className="text-lg">+</span>
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {groups.map(group => (
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 stagger-children">
+              {groups.map((group, idx) => (
                 <div
                   key={group.id}
                   onClick={() => navigate(`/group/${group.id}`)}
-                  className="glass-card p-5 cursor-pointer hover:border-vibe-purple/50 transition-all duration-200 hover:-translate-y-1"
+                  className="glass-card p-5 cursor-pointer card-hover animate-slide-up border border-vibe-border"
+                  style={{ animationDelay: `${idx * 0.08}s` }}
                 >
+                  {/* Top row */}
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <p className="font-display font-bold text-white text-lg">{group.emoji} {group.name}</p>
+                      <p className="font-display font-bold text-white text-lg">
+                        {group.emoji} {group.name}
+                      </p>
                       <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${group.tagColor}`}>
                         {group.tag}
                       </span>
                     </div>
-                    <p className={`font-display font-bold text-lg ${group.yourBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {group.yourBalance >= 0 ? '+' : ''}₹{group.yourBalance.toFixed(2)}
-                    </p>
+                    <div className="text-right">
+                      <p className={`font-display font-bold text-lg ${group.yourBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {group.yourBalance >= 0 ? '+' : ''}₹{Math.abs(group.yourBalance).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-gray-500">{group.yourBalance >= 0 ? 'you get' : 'you owe'}</p>
+                    </div>
                   </div>
 
                   {/* Member avatars */}
@@ -173,30 +306,49 @@ export default function Dashboard() {
                     {group.members.map((m, i) => (
                       <div
                         key={i}
-                        className={`w-8 h-8 rounded-full ${group.memberColors[i]} flex items-center justify-center text-xs font-bold text-white border-2 border-vibe-bg`}
+                        title={m}
+                        className={`w-8 h-8 rounded-full ${group.memberColors[i] || 'bg-gray-600'} flex items-center justify-center text-xs font-bold text-white border-2 border-vibe-bg transition-transform hover:scale-110 hover:z-10`}
+                        style={{ marginLeft: i > 0 ? '-6px' : '0' }}
                       >
                         {m}
                       </div>
                     ))}
+                    <div className="w-8 h-8 rounded-full bg-vibe-border flex items-center justify-center text-xs text-gray-400 border-2 border-vibe-bg" style={{ marginLeft: '-6px' }}>
+                      +{group.memberCount}
+                    </div>
                   </div>
 
-                  {/* Settlement progress */}
-                  <div className="h-1.5 rounded-full bg-vibe-border overflow-hidden mb-2">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${(group.settled / group.totalExpense) * 100}%`,
-                        background: 'linear-gradient(90deg, #7c3aed, #06b6d4)'
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Settled ₹{group.settled}</span>
-                    <span>Total ₹{group.totalExpense}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">👥 {group.memberCount} members ↗</p>
+                  {/* Progress */}
+                  {group.totalExpense > 0 ? (
+                    <>
+                      <div className="h-2 rounded-full bg-vibe-border overflow-hidden mb-1">
+                        <div
+                          className="h-full rounded-full transition-all duration-1000"
+                          style={{
+                            width: `${Math.min((group.settled / group.totalExpense) * 100, 100)}%`,
+                            background: 'linear-gradient(90deg, #7c3aed, #06b6d4)',
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>₹{group.settled} settled</span>
+                        <span>{Math.round((group.settled / group.totalExpense) * 100)}%</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-500 italic">No expenses yet — add one! 💸</p>
+                  )}
                 </div>
               ))}
+
+              {/* Add group card */}
+              <div
+                onClick={() => setShowNewGroup(true)}
+                className="glass-card p-5 cursor-pointer card-hover border border-dashed border-vibe-border flex items-center justify-center gap-3 text-gray-500 hover:text-vibe-violet hover:border-vibe-purple/50 min-h-[160px]"
+              >
+                <span className="text-3xl">+</span>
+                <span className="font-display font-semibold">New Group</span>
+              </div>
             </div>
           </div>
 
@@ -205,21 +357,42 @@ export default function Dashboard() {
             <h2 className="font-display text-xl font-bold text-white mb-4">🏆 Leaderboard</h2>
             <div className="glass-card p-5 space-y-4">
               {[
-                { rank: 1, initials: 'PS', name: 'Priya S', title: '⚡ Debt Crusher', xp: '2.8k', color: 'bg-pink-500' },
-                { rank: 2, initials: 'MR', name: 'Maya R', title: '🚀 Fast Payer', xp: '2.2k', color: 'bg-cyan-500' },
-                { rank: 3, initials: 'AK', name: 'Alex Kim', title: '🏆 Group Hero', xp: '2.0k', color: 'bg-orange-400' },
-                { rank: 4, initials: 'JT', name: 'Jordan T', title: '⭐ Rising Star', xp: '1.5k', color: 'bg-yellow-500' },
-              ].map(p => (
-                <div key={p.rank} className="flex items-center gap-3">
-                  <span className="text-gray-400 font-bold w-4 text-sm">{p.rank}</span>
+                { rank: 1, initials: 'PS', name: 'Priya S', title: '⚡ Debt Crusher', xp: '2.8k', color: 'bg-pink-500', medal: '🥇' },
+                { rank: 2, initials: 'MR', name: 'Maya R', title: '🚀 Fast Payer', xp: '2.2k', color: 'bg-cyan-500', medal: '🥈' },
+                { rank: 3, initials: 'AK', name: 'Alex Kim', title: '🏆 Group Hero', xp: '2.0k', color: 'bg-orange-400', medal: '🥉' },
+                { rank: 4, initials: 'JT', name: 'Jordan T', title: '⭐ Rising Star', xp: '1.5k', color: 'bg-yellow-500', medal: '4' },
+              ].map((p, i) => (
+                <div
+                  key={p.rank}
+                  className={`flex items-center gap-3 p-2 rounded-xl transition-all hover:bg-vibe-border/30 animate-slide-up`}
+                  style={{ animationDelay: `${i * 0.1}s` }}
+                >
+                  <span className="text-lg w-6 text-center">{p.medal}</span>
                   <div className={`w-9 h-9 rounded-full ${p.color} flex items-center justify-center text-xs font-bold text-white`}>
                     {p.initials}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-white">{p.name}</p>
-                    <p className="text-xs text-gray-500">{p.title}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{p.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{p.title}</p>
                   </div>
-                  <p className="text-sm font-bold text-vibe-violet">{p.xp}</p>
+                  <p className="text-sm font-bold text-vibe-violet font-mono">{p.xp}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Quick stats */}
+            <div className="glass-card p-5 mt-4 space-y-3">
+              <p className="font-display font-bold text-white text-sm mb-2">📊 Your Stats</p>
+              {[
+                { label: 'Groups Joined', value: groups.length, icon: '👥' },
+                { label: 'Total XP', value: `${xp.toLocaleString()}`, icon: '⚡' },
+                { label: 'Settled Bills', value: '12', icon: '✅' },
+              ].map(s => (
+                <div key={s.label} className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400 flex items-center gap-2">
+                    {s.icon} {s.label}
+                  </span>
+                  <span className="text-sm font-bold text-white">{s.value}</span>
                 </div>
               ))}
             </div>
@@ -227,18 +400,18 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* New Group Modal */}
+      {/* ── New Group Modal ── */}
       {showNewGroup && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-          <div className="glass-card p-8 w-full max-w-md animate-slide-up">
-            <h3 className="font-display text-2xl font-bold mb-2">New Group ✨</h3>
-            <p className="text-gray-400 text-sm mb-6">Create a group to start splitting</p>
+          <div className="glass-card p-8 w-full max-w-md animate-slide-up neon-border">
+            <h3 className="font-display text-2xl font-bold mb-1">New Group ✨</h3>
+            <p className="text-gray-400 text-sm mb-6">Create a squad, start splitting</p>
 
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Group Name</label>
+                <label className="text-xs text-gray-400 mb-1.5 block font-semibold uppercase tracking-wide">Group Name</label>
                 <input
-                  className="w-full bg-vibe-bg border border-vibe-border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-vibe-purple"
+                  className="w-full bg-vibe-bg border border-vibe-border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-vibe-purple transition-colors"
                   placeholder="e.g. 🏕️ Coorg Trip"
                   value={groupName}
                   onChange={e => setGroupName(e.target.value)}
@@ -248,19 +421,19 @@ export default function Dashboard() {
               </div>
 
               <div>
-                <label className="text-xs text-gray-400 mb-2 block">Tag</label>
+                <label className="text-xs text-gray-400 mb-2 block font-semibold uppercase tracking-wide">Vibe</label>
                 <div className="flex gap-2 flex-wrap">
-                  {['Fun', 'Home', 'Travel', 'Food', 'Work'].map(tag => (
+                  {Object.entries(TAG_EMOJIS).map(([tag, emoji]) => (
                     <button
                       key={tag}
                       onClick={() => setGroupTag(tag)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      className={`px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1 ${
                         groupTag === tag
-                          ? 'bg-vibe-purple text-white'
-                          : 'bg-vibe-border text-gray-400 hover:text-white'
+                          ? 'bg-vibe-purple text-white scale-105'
+                          : 'bg-vibe-border text-gray-400 hover:text-white hover:bg-vibe-border/80'
                       }`}
                     >
-                      {tag}
+                      {emoji} {tag}
                     </button>
                   ))}
                 </div>
@@ -268,16 +441,26 @@ export default function Dashboard() {
             </div>
 
             <div className="flex gap-3 mt-6">
-              <button className="btn-primary flex-1 py-3" onClick={handleCreateGroup}>
-                Create Group ✨
+              <button
+                className="btn-primary flex-1 py-3 disabled:opacity-40"
+                onClick={handleCreateGroup}
+                disabled={!groupName.trim()}
+              >
+                Create ✨
               </button>
-              <button className="btn-secondary flex-1 py-3" onClick={() => { setShowNewGroup(false); setGroupName('') }}>
+              <button
+                className="btn-secondary flex-1 py-3"
+                onClick={() => { setShowNewGroup(false); setGroupName('') }}
+              >
                 Cancel
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ── Toasts ── */}
+      <Toast toasts={toasts} />
     </div>
   )
 }
