@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useWeb3 } from '../context/Web3Context'
 
 const MEMBERS = [
   { name: 'Pranav', initials: 'PR', color: 'bg-purple-500' },
@@ -7,9 +8,17 @@ const MEMBERS = [
   { name: 'Arjun', initials: 'AR', color: 'bg-yellow-500' },
 ]
 
+const NAME_TO_ADDRESS = {
+  'Pranav': '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+  'Rahul': '0x742d35Cc6634C0532925a3b844Bc454e4438f44f',
+  'Sneha': '0x742d35Cc6634C0532925a3b844Bc454e4438f44g',
+  'Arjun': '0x742d35Cc6634C0532925a3b844Bc454e4438f44h',
+}
+
 const CATEGORIES = ['🍕 Food', '🏠 Home', '✈️ Travel', '🎮 Fun', '💡 Bills', '🛒 Shopping']
 
-export default function ExpenseModal({ onClose }) {
+export default function ExpenseModal({ groupId, onAdded, onClose }) {
+  const { account } = useWeb3()
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
   const [paidBy, setPaidBy] = useState('Pranav')
@@ -17,6 +26,7 @@ export default function ExpenseModal({ onClose }) {
   const [category, setCategory] = useState('🍕 Food')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
 
   const toggleMember = (name) => {
     setSplitAmong(prev =>
@@ -29,13 +39,40 @@ export default function ExpenseModal({ onClose }) {
     : '0.00'
 
   const handleSubmit = async () => {
-    if (!title || !amount || splitAmong.length === 0) return
+    if (!title || !amount || splitAmong.length === 0 || !account) return
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1500))
-    setLoading(false)
-    setDone(true)
-    await new Promise(r => setTimeout(r, 1000))
-    onClose()
+    setError('')
+
+    const splitPayload = splitAmong.map(user => ({
+      user: NAME_TO_ADDRESS[user] || user,
+      amount: parseFloat(amount) / splitAmong.length,
+    }))
+
+    try {
+      const response = await fetch('https://YOUR-CODESPACE-URL-5000.app.github.dev/api/expenses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          amount: parseFloat(amount),
+          paidBy: account,
+          participants: splitAmong.map(user => NAME_TO_ADDRESS[user] || user),
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Unable to add expense')
+      }
+
+      setLoading(false)
+      window.location.reload()
+    } catch (err) {
+      setLoading(false)
+      setError(err.message || 'Failed to add expense')
+    }
   }
 
   return (
@@ -154,11 +191,12 @@ export default function ExpenseModal({ onClose }) {
             )}
 
             {/* Submit */}
+            {error && <p className="text-sm text-red-400">{error}</p>}
             <div className="flex gap-3 pt-1">
               <button
                 className="btn-primary flex-1 py-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleSubmit}
-                disabled={loading || !title || !amount || splitAmong.length === 0}
+                disabled={loading || !title || !amount || splitAmong.length === 0 || !account}
               >
                 {loading ? '⏳ Adding...' : '+ Add Expense'}
               </button>

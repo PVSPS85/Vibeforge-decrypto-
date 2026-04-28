@@ -55,6 +55,32 @@ export function useContract() {
     }
   }, [getContract])
 
+  const addExpenseToBlockchain = useCallback(async (expense) => {
+    setLoading(true)
+    setTxError(null)
+    try {
+      const contract = await getContract()
+      if (!contract) throw new Error('Contract not found')
+
+      const {
+        groupId,
+        title,
+        amountInWei,
+        splitAmong,
+      } = expense
+
+      const tx = await contract.addExpense(groupId, title, amountInWei, splitAmong)
+      setTxHash(tx.hash)
+      await tx.wait()
+      return tx.hash
+    } catch (err) {
+      setTxError(err.message)
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }, [getContract])
+
   const settleDebt = useCallback(async (groupId, toAddress, amountInWei) => {
     setLoading(true)
     setTxError(null)
@@ -79,6 +105,7 @@ export function useContract() {
     txError,
     createGroup,
     addExpense,
+    addExpenseToBlockchain,
     settleDebt,
   }
 }

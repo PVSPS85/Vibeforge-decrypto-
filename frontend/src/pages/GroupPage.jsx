@@ -1,21 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ExpenseModal from '../components/ExpenseModal'
-
-const DEMO_EXPENSES = [
-  { id: 1, title: 'Hotel Booking', amount: 6000, paidBy: 'Pranav', paidByColor: 'bg-purple-500', date: '2026-04-20', split: ['Pranav', 'Rahul', 'Sneha', 'Arjun'] },
-  { id: 2, title: 'Dinner at Shack', amount: 2400, paidBy: 'Rahul', paidByColor: 'bg-cyan-500', date: '2026-04-21', split: ['Pranav', 'Rahul', 'Sneha', 'Arjun'] },
-  { id: 3, title: 'Scooter Rent', amount: 1800, paidBy: 'Sneha', paidByColor: 'bg-pink-500', date: '2026-04-22', split: ['Pranav', 'Sneha'] },
-  { id: 4, title: 'Waterpark Entry', amount: 2200, paidBy: 'Arjun', paidByColor: 'bg-yellow-500', date: '2026-04-22', split: ['Pranav', 'Rahul', 'Sneha', 'Arjun'] },
-]
 
 const INITIAL_BALANCES = [
   { name: 'Rahul', initials: 'RA', color: 'bg-cyan-500', owes: 1500, settled: false },
   { name: 'Sneha', initials: 'SN', color: 'bg-pink-500', owes: -800, settled: false },
   { name: 'Arjun', initials: 'AR', color: 'bg-yellow-500', owes: 600, settled: false },
 ]
-
-const totalExpense = DEMO_EXPENSES.reduce((s, e) => s + e.amount, 0)
 
 export default function GroupPage() {
   const { id } = useParams()
@@ -24,6 +15,52 @@ export default function GroupPage() {
   const [balances, setBalances] = useState(INITIAL_BALANCES)
   const [paying, setPaying] = useState(null)
   const [showConfetti, setShowConfetti] = useState(false)
+  const [expenses, setExpenses] = useState([])
+  const [loadingExpenses, setLoadingExpenses] = useState(false)
+  const [group, setGroup] = useState(null)
+  const [loadingGroup, setLoadingGroup] = useState(false)
+
+  const totalExpense = expenses.reduce((s, e) => s + e.amount, 0)
+
+  const fetchExpenses = async () => {
+    setLoadingExpenses(true)
+    try {
+      const response = await fetch('https://YOUR-CODESPACE-URL-5000.app.github.dev/api/expenses')
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Unable to load expenses')
+      }
+      setExpenses(result.data || [])
+    } catch (error) {
+      console.error('Fetch expenses error:', error)
+      setExpenses([])
+    } finally {
+      setLoadingExpenses(false)
+    }
+  }
+
+  const fetchGroup = async () => {
+    if (!id) return
+    setLoadingGroup(true)
+    try {
+      const response = await fetch(`https://YOUR-CODESPACE-URL-5000.app.github.dev/api/groups/${id}`)
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Unable to load group')
+      }
+      setGroup(result.data)
+    } catch (error) {
+      console.error('Fetch group error:', error)
+      setGroup(null)
+    } finally {
+      setLoadingGroup(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchGroup()
+    fetchExpenses()
+  }, [id])
 
   const settledCount = balances.filter(b => b.settled).length
   const settledAmount = balances.filter(b => b.settled && b.owes > 0).reduce((s, b) => s + b.owes, 0)
@@ -71,8 +108,8 @@ export default function GroupPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
-            <h1 className="font-display text-4xl font-bold">🏖️ Goa Trip</h1>
-            <p className="text-gray-400 mt-1 text-sm">4 members · ₹{totalExpense.toLocaleString()} total</p>
+            <h1 className="font-display text-4xl font-bold">{loadingGroup ? 'Loading...' : group?.name || 'Group'}</h1>
+            <p className="text-gray-400 mt-1 text-sm">{group?.members?.length || 0} members · ₹{totalExpense.toLocaleString()} total</p>
           </div>
           <button className="btn-primary" onClick={() => setShowModal(true)}>
             + Add Expense
@@ -104,25 +141,40 @@ export default function GroupPage() {
           {/* Expenses */}
           <div className="lg:col-span-2 space-y-3">
             <h2 className="font-display text-xl font-semibold text-gray-200 mb-4">💸 Expenses</h2>
-            {DEMO_EXPENSES.map(exp => (
-              <div key={exp.id} className="glass-card p-5 flex items-center justify-between hover:border-vibe-purple/40 transition-all">
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-full ${exp.paidByColor} flex items-center justify-center text-xs font-bold text-white`}>
-                    {exp.paidBy[0]}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-white">{exp.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Paid by {exp.paidBy} · {exp.date} · {exp.split.length} people
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-display text-xl font-bold text-vibe-violet">₹{exp.amount.toLocaleString()}</p>
-                  <p className="text-xs text-gray-500">₹{(exp.amount / exp.split.length).toFixed(0)} each</p>
-                </div>
+            {loadingExpenses ? (
+              <div className="glass-card p-5 text-center text-gray-400">Loading expenses...</div>
+            ) : expenses.length === 0 ? (
+              <div className="glass-card p-8 text-center text-gray-400">
+                No expenses yet. Add one to get started.
               </div>
-            ))}
+            ) : (
+              expenses.map(exp => {
+                const paidByName = exp.paidBy?.name || exp.paidBy || 'Unknown'
+                const dateLabel = exp.createdAt ? new Date(exp.createdAt).toLocaleDateString() : '—'
+                const itemCount = Array.isArray(exp.split) ? exp.split.length : 0
+                const perPerson = itemCount ? (exp.amount / itemCount).toFixed(0) : '0'
+
+                return (
+                  <div key={exp._id} className="glass-card p-5 flex items-center justify-between hover:border-vibe-purple/40 transition-all">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full bg-vibe-purple flex items-center justify-center text-xs font-bold text-white`}>
+                        {paidByName[0] || 'U'}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white">{exp.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Paid by {paidByName} · {dateLabel} · {itemCount} people
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display text-xl font-bold text-vibe-violet">₹{exp.amount.toLocaleString()}</p>
+                      <p className="text-xs text-gray-500">₹{perPerson} each</p>
+                    </div>
+                  </div>
+                )
+              })
+            )}
           </div>
 
           {/* Who Owes Whom */}
@@ -177,7 +229,7 @@ export default function GroupPage() {
         </div>
       </div>
 
-      {showModal && <ExpenseModal onClose={() => setShowModal(false)} />}
+      {showModal && <ExpenseModal groupId={id} onAdded={fetchExpenses} onClose={() => setShowModal(false)} />}
     </div>
   )
 }
