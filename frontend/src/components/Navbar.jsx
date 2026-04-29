@@ -57,12 +57,12 @@ export default function Navbar() {
 
         {/* XP Badge */}
         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-          <span className="text-xs text-yellow-300 font-bold">⚡ 2,840 XP</span>
+          <span className="text-xs text-yellow-300 font-bold">⚡ {(userProfile?.xp || 0).toLocaleString()} XP</span>
         </div>
 
         {/* Level Badge */}
         <div className="hidden md:flex items-center gap-1 px-3 py-1.5 rounded-xl bg-vibe-purple/10 border border-vibe-purple/20">
-          <span className="text-xs text-vibe-violet font-bold">Lv.7</span>
+          <span className="text-xs text-vibe-violet font-bold">Lv.{Math.floor((userProfile?.xp || 0) / 500) + 1}</span>
         </div>
 
         {/* User Identity */}
@@ -71,10 +71,10 @@ export default function Navbar() {
           {userProfile ? (
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-white">
-                {userProfile.displayName}
+                {userProfile.displayName || 'Unnamed User'}
               </span>
               <span className="text-xs bg-vibe-purple/20 text-vibe-violet px-2 py-0.5 rounded font-mono border border-vibe-purple/30">
-                {userProfile.appUid}
+                {userProfile.appUid || 'SS-????'}
               </span>
               <button 
                 onClick={handleCopyUid}

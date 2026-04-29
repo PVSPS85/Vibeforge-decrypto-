@@ -22,6 +22,9 @@ exports.createExpense = async (req, res) => {
       split: splitEntries,
     });
 
+    const User = require('../models/User');
+    await User.findOneAndUpdate({ walletAddress: paidBy.toLowerCase() }, { $inc: { xp: 50 } });
+
     res.status(201).json({ success: true, data: expense });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -74,6 +77,15 @@ exports.settleExpense = async (req, res) => {
 
     if (!expense) {
       return res.status(404).json({ success: false, error: 'Expense not found' });
+    }
+
+    // Award 500 XP to the person who settles the debt.
+    // In our simplified flow, anyone could trigger settle, but we'll award the current user if we have them.
+    // The request doesn't send the settler's wallet. Let's add it or skip.
+    // Actually, we can check req.body.settlerWallet. If provided, reward them.
+    if (req.body.settlerWallet) {
+      const User = require('../models/User');
+      await User.findOneAndUpdate({ walletAddress: req.body.settlerWallet.toLowerCase() }, { $inc: { xp: 500 } });
     }
 
     res.status(200).json({ success: true, data: expense });

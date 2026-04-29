@@ -1,6 +1,60 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { ethers } from 'ethers'
 
+function ProfileOnboardingModal({ walletAddress, onComplete }) {
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch('http://localhost:5005/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), walletAddress })
+      })
+      const data = await res.json()
+      if (data.success) {
+        onComplete(data.data)
+      } else {
+        alert(data.error)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center px-4">
+      <div className="bg-vibe-card border border-vibe-border p-8 rounded-2xl w-full max-w-md animate-slide-up shadow-2xl">
+        <h3 className="font-display text-2xl font-bold mb-2 text-white">Welcome to SmartSplit ⚡</h3>
+        <p className="text-gray-400 text-sm mb-6">Choose a display name so your friends can recognize you. You'll get a unique App UID!</p>
+        
+        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Display Name</label>
+        <input 
+          className="w-full bg-vibe-bg border border-vibe-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-vibe-purple transition-colors mb-6"
+          placeholder="e.g. Satoshi"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSave()}
+          autoFocus
+        />
+        
+        <button 
+          onClick={handleSave} 
+          disabled={!name.trim() || saving}
+          className="w-full bg-vibe-purple hover:bg-vibe-violet text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50"
+        >
+          {saving ? 'Creating Profile...' : 'Start Splitting 🚀'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const Web3Context = createContext(null)
 
 export function Web3Provider({ children }) {
@@ -10,6 +64,27 @@ export function Web3Provider({ children }) {
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
+  
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
+  const [pendingWallet, setPendingWallet] = useState(null)
+
+  const handleAuth = async (walletAddress) => {
+    try {
+      const res = await fetch(`http://localhost:5005/api/users/${walletAddress}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) {
+          setUserProfile(data.data)
+          return
+        }
+      }
+      // If user doesn't exist, prompt for name
+      setPendingWallet(walletAddress)
+      setNeedsOnboarding(true)
+    } catch (err) {
+      console.error('Failed to auth user:', err)
+    }
+  }
 
   // Only auto-reconnect if user previously connected
   useEffect(() => {
@@ -21,21 +96,7 @@ export function Web3Provider({ children }) {
         if (accounts.length > 0) {
           const _signer = await _provider.getSigner()
           const walletAddress = accounts[0]
-          
-          // Ensure user is registered in the backend
-          try {
-            const res = await fetch('http://localhost:5005/api/users', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: 'User', walletAddress })
-            })
-            const data = await res.json()
-            if (data.success) {
-              setUserProfile(data.data)
-            }
-          } catch (apiErr) {
-            console.error('Failed to register user to backend:', apiErr)
-          }
+          await handleAuth(walletAddress)
 
           setProvider(_provider)
           setSigner(_signer)
@@ -76,20 +137,7 @@ export function Web3Provider({ children }) {
       const _signer = await _provider.getSigner()
       const walletAddress = accounts[0]
 
-      // Ensure user is registered in the backend
-      try {
-        const res = await fetch('http://localhost:5005/api/users', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'User', walletAddress })
-        })
-        const data = await res.json()
-        if (data.success) {
-          setUserProfile(data.data)
-        }
-      } catch (apiErr) {
-        console.error('Failed to register user to backend:', apiErr)
-      }
+      await handleAuth(walletAddress)
 
       setProvider(_provider)
       setSigner(_signer)
@@ -115,6 +163,16 @@ export function Web3Provider({ children }) {
       connectWallet, disconnectWallet
     }}>
       {children}
+      {needsOnboarding && pendingWallet && (
+        <ProfileOnboardingModal 
+          walletAddress={pendingWallet} 
+          onComplete={(profile) => {
+            setUserProfile(profile)
+            setNeedsOnboarding(false)
+            setPendingWallet(null)
+          }} 
+        />
+      )}
     </Web3Context.Provider>
   )
 }

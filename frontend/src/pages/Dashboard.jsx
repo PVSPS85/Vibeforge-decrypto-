@@ -128,42 +128,38 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   const [groups, setGroups] = useState([])
-
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [groupTag, setGroupTag] = useState('Fun')
   const [toasts, setToasts] = useState([])
-  const [xp, setXp] = useState(() => {
-    try { return parseInt(localStorage.getItem('vibeforge_xp') || '2840') }
-    catch { return 2840 }
-  })
   const [mounted, setMounted] = useState(false)
 
+  // XP is pulled from backend profile directly!
+  const xp = userProfile?.xp || 50
   const maxXp = 3500
   const level = Math.floor(xp / 500) + 1
 
   const [allExpenses, setAllExpenses] = useState([])
 
-  // Fetch Groups AND Expenses from backend
+  // Fetch Groups AND true Expenses from backend
   useEffect(() => {
     if (!account) return
     const fetchData = async () => {
       try {
-        const [groupsRes, expRes] = await Promise.all([
-          fetch(`http://localhost:5005/api/groups?wallet=${account}`),
-          fetch(`http://localhost:5005/api/expenses?wallet=${account}`) // Fetch all expenses involving this user
-        ])
-        
+        const groupsRes = await fetch(`http://localhost:5005/api/groups?wallet=${account}`)
         const groupsData = await groupsRes.json()
-        const expData = await expRes.json()
         
-        const expenses = expData.success ? expData.data : []
-        setAllExpenses(expenses)
-
         if (groupsData.success) {
-          const formattedGroups = groupsData.data.map(g => {
-            // Calculate math for this specific group
-            const groupExps = expenses.filter(e => e.group === g._id)
+          let globalExpenses = []
+          const formattedGroups = await Promise.all(groupsData.data.map(async (g) => {
+            
+            // Fetch ALL expenses for this group to ensure math is 100% real
+            const expRes = await fetch(`http://localhost:5005/api/expenses/group/${g._id}`)
+            const expData = await expRes.json()
+            const groupExps = expData.success ? expData.data : []
+            
+            globalExpenses = [...globalExpenses, ...groupExps]
+
             let totalExp = 0
             let yourBal = 0
             
@@ -171,12 +167,12 @@ export default function Dashboard() {
               totalExp += exp.amount
               const share = exp.amount / exp.split.length
               
-              // If you paid, you get back everyone else's share
-              if (exp.paidBy.toLowerCase() === account.toLowerCase()) {
+              const payerWallet = (exp.paidBy?.walletAddress || exp.paidBy).toLowerCase()
+              
+              if (payerWallet === account.toLowerCase()) {
                 yourBal += (exp.amount - share)
               } else {
-                // If someone else paid, and you are in the split, you owe your share
-                const inSplit = exp.split.find(s => s.user.toLowerCase() === account.toLowerCase())
+                const inSplit = exp.split.find(s => (s.user?.walletAddress || s.user).toLowerCase() === account.toLowerCase())
                 if (inSplit) {
                   yourBal -= share
                 }
@@ -188,19 +184,20 @@ export default function Dashboard() {
               id: g._id,
               memberColors: g.members.map(() => 'bg-purple-500'),
               totalExpense: totalExp,
-              settled: 0, // Pending on-chain settlement logic
+              settled: 0, 
               yourBalance: yourBal,
               memberCount: g.members.length > 1 ? g.members.length - 1 : 0
             }
-          })
+          }))
           setGroups(formattedGroups)
+          setAllExpenses(globalExpenses)
         }
       } catch (err) {
         console.error("Failed to fetch data", err)
       }
     }
     fetchData()
-  }, [account])
+  }, [account, userProfile])
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 100)

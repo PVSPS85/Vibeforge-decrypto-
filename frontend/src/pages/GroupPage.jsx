@@ -19,6 +19,11 @@ export default function GroupPage() {
 
   // Fetch Group & Expenses from API
   useEffect(() => {
+    // PREVENT LEAKAGE: Wipe state immediately when group ID changes
+    setGroup({ name: 'Loading...', emoji: '⏳' })
+    setMembers([])
+    setExpenses([])
+
     const fetchGroupData = async () => {
       try {
         const [groupRes, expRes] = await Promise.all([
@@ -344,7 +349,7 @@ export default function GroupPage() {
                     <div
                       key={member.walletAddress || index}
                       className={`w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold text-white`}
-                      title={`${member.displayName} (${member.appUid})`}
+                      title={`${member.displayName || 'Unknown User'} (${member.appUid || '???'})`}
                     >
                       {(member.displayName || 'U').slice(0, 2).toUpperCase()}
                     </div>

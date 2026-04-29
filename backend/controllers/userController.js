@@ -25,9 +25,10 @@ exports.registerUser = async (req, res) => {
     }
 
     user = await User.create({
-      displayName: name || 'User',
+      displayName: name,
       appUid: newUid,
       walletAddress: walletAddress.toLowerCase(),
+      xp: 50, // Starting XP for joining
     });
 
     res.status(201).json({ success: true, data: user, isNewUser: true });

@@ -15,6 +15,9 @@ exports.createGroup = async (req, res) => {
       members: [adminWallet.toLowerCase()], // Admin is automatically a member
     });
 
+    const User = require('../models/User');
+    await User.findOneAndUpdate({ walletAddress: adminWallet.toLowerCase() }, { $inc: { xp: 100 } });
+
     res.status(201).json({ success: true, data: group });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -48,6 +51,9 @@ exports.addMemberToGroup = async (req, res) => {
 
     group.members.push(walletAddress);
     await group.save();
+
+    // Reward XP for joining a group
+    await User.findOneAndUpdate({ walletAddress: walletAddress.toLowerCase() }, { $inc: { xp: 50 } });
 
     res.status(200).json({ success: true, data: group });
   } catch (error) {

@@ -22,6 +22,10 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  xp: {
+    type: Number,
+    default: 0,
+  },
 });
 
 module.exports = mongoose.model('User', UserSchema);
