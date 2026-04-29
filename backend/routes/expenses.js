@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const {
-  addExpense,
+  createExpense,
+  getExpenses,
   getGroupExpenses,
   settleExpense
 } = require('../controllers/expenseController');
 
 // All routes here are prefixed with /api/expenses
 router.route('/')
-  .post(addExpense);
+  .get(getExpenses)
+  .post(createExpense);
 
 router.route('/group/:groupId')
   .get(getGroupExpenses);

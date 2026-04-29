@@ -4,7 +4,7 @@ const User = require('../models/User');
 // @route   POST /api/users
 exports.registerUser = async (req, res) => {
   try {
-    const { username, walletAddress, email } = req.body;
+    const { name, walletAddress } = req.body;
 
     let user = await User.findOne({ walletAddress: walletAddress.toLowerCase() });
 
@@ -13,9 +13,8 @@ exports.registerUser = async (req, res) => {
     }
 
     user = await User.create({
-      username,
+      name,
       walletAddress: walletAddress.toLowerCase(),
-      email,
     });
 
     res.status(201).json({ success: true, data: user });

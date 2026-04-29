@@ -2,41 +2,75 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import ExpenseModal from '../components/ExpenseModal'
 
-const INITIAL_BALANCES = [
-  { name: 'Rahul', initials: 'RA', color: 'bg-cyan-500', owes: 1500, settled: false },
-  { name: 'Sneha', initials: 'SN', color: 'bg-pink-500', owes: -800, settled: false },
-  { name: 'Arjun', initials: 'AR', color: 'bg-yellow-500', owes: 600, settled: false },
-]
-
-const DEMO_EXPENSES = [
-  { _id: '1', title: 'Hotel Booking', amount: 6000, paidBy: { name: 'Pranav' }, split: ['Pranav','Rahul','Sneha','Arjun'], createdAt: '2026-04-20' },
-  { _id: '2', title: 'Dinner at Shack', amount: 2400, paidBy: { name: 'Rahul' }, split: ['Pranav','Rahul','Sneha','Arjun'], createdAt: '2026-04-21' },
-]
-
 export default function GroupPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+
   const [showModal, setShowModal] = useState(false)
-  const [balances, setBalances] = useState(INITIAL_BALANCES)
+  const [showAddMember, setShowAddMember] = useState(false)
+  const [newMemberName, setNewMemberName] = useState('')
   const [paying, setPaying] = useState(null)
   const [showConfetti, setShowConfetti] = useState(false)
 
-  // Expenses persist in localStorage per group
+  // Load expenses from localStorage
   const [expenses, setExpenses] = useState(() => {
     try {
       const saved = localStorage.getItem(`expenses_group_${id}`)
-      return saved ? JSON.parse(saved) : DEMO_EXPENSES
-    } catch { return DEMO_EXPENSES }
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
   })
 
-  // Load group info from localStorage
-  const [group] = useState(() => {
+  // Load members from localStorage
+  const [members, setMembers] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`members_group_${id}`)
+      return saved ? JSON.parse(saved) : ['Pranav']
+    } catch {
+      return ['Pranav']
+    }
+  })
+
+  // Load group from localStorage
+  const group = (() => {
     try {
       const saved = localStorage.getItem('vibeforge_groups')
       const groups = saved ? JSON.parse(saved) : []
-      return groups.find(g => g.id === id) || { name: 'Group', emoji: '🏖️', members: [] }
-    } catch { return { name: 'Group', emoji: '🏖️', members: [] } }
-  })
+      return groups.find(g => g.id === id) || { name: 'Group', emoji: '🏖️' }
+    } catch {
+      return { name: 'Group', emoji: '🏖️' }
+    }
+  })()
+
+  // Calculate balances dynamically from expenses
+  const balances = (() => {
+    const balanceMap = {}
+    members.forEach(member => balanceMap[member] = 0)
+
+    expenses.forEach(exp => {
+      const splitCount = exp.split.length
+      const share = exp.amount / splitCount
+      exp.split.forEach(person => {
+        if (person !== exp.paidBy.name) {
+          if (balanceMap[person] !== undefined) {
+            balanceMap[person] -= share
+          }
+          if (balanceMap[exp.paidBy.name] !== undefined) {
+            balanceMap[exp.paidBy.name] += share
+          }
+        }
+      })
+    })
+
+    return members.map((member, index) => ({
+      name: member,
+      initials: member.split(' ').map(n => n[0]).join('').toUpperCase(),
+      color: ['bg-purple-500', 'bg-cyan-500', 'bg-yellow-500', 'bg-green-500'][index % 4],
+      owes: Math.round(balanceMap[member] * 100) / 100,
+      settled: false
+    }))
+  })()
 
   const totalExpense = expenses.reduce((s, e) => s + e.amount, 0)
   const settledCount = balances.filter(b => b.settled).length
@@ -46,14 +80,12 @@ export default function GroupPage() {
   const handlePay = async (name) => {
     setPaying(name)
     await new Promise(r => setTimeout(r, 1500))
-    setBalances(prev => prev.map(b => b.name === name ? { ...b, settled: true } : b))
     setPaying(null)
   }
 
   const handleSettleAll = async () => {
     setPaying('all')
     await new Promise(r => setTimeout(r, 2000))
-    setBalances(prev => prev.map(b => ({ ...b, settled: true })))
     setPaying(null)
     setShowConfetti(true)
     setTimeout(() => setShowConfetti(false), 3000)
@@ -61,11 +93,26 @@ export default function GroupPage() {
 
   const handleAddExpense = (newExpense) => {
     if (!newExpense) return
-    setExpenses(prev => {
-      const updated = [newExpense, ...prev]
+    const updated = [newExpense, ...expenses]
+    setExpenses(updated)
+    try {
       localStorage.setItem(`expenses_group_${id}`, JSON.stringify(updated))
-      return updated
-    })
+    } catch (error) {
+      console.error('Error saving expenses:', error)
+    }
+  }
+
+  const handleAddMember = () => {
+    if (!newMemberName.trim()) return
+    const updated = [...members, newMemberName.trim()]
+    setMembers(updated)
+    try {
+      localStorage.setItem(`members_group_${id}`, JSON.stringify(updated))
+    } catch (error) {
+      console.error('Error saving members:', error)
+    }
+    setNewMemberName('')
+    setShowAddMember(false)
   }
 
   return (
@@ -96,12 +143,17 @@ export default function GroupPage() {
               {group.emoji} {group.name}
             </h1>
             <p className="text-gray-400 mt-1 text-sm">
-              4 members · ₹{totalExpense.toLocaleString()} total
+              {members.length} members · ₹{totalExpense.toLocaleString()} total
             </p>
           </div>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            + Add Expense
-          </button>
+          <div className="flex gap-3">
+            <button className="btn-secondary" onClick={() => setShowAddMember(true)}>
+              👥 Add Member
+            </button>
+            <button className="btn-primary" onClick={() => setShowModal(true)}>
+              + Add Expense
+            </button>
+          </div>
         </div>
 
         {/* Progress */}
@@ -226,9 +278,63 @@ export default function GroupPage() {
       {showModal && (
         <ExpenseModal
           groupId={id}
+          members={members}
           onAdded={handleAddExpense}
           onClose={() => setShowModal(false)}
         />
+      )}
+
+      {showAddMember && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+          <div className="glass-card p-8 w-full max-w-md animate-slide-up">
+            <h3 className="font-display text-2xl font-bold mb-1">Add Member 👥</h3>
+            <p className="text-gray-400 text-sm mb-6">Add someone to the group</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block font-semibold uppercase tracking-wide">Member Name</label>
+                <input
+                  className="w-full bg-vibe-bg border border-vibe-border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-vibe-purple transition-colors"
+                  placeholder="e.g. John Doe"
+                  value={newMemberName}
+                  onChange={e => setNewMemberName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddMember()}
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wide">Current Members</p>
+                <div className="flex gap-2 flex-wrap">
+                  {members.map((member, index) => (
+                    <div
+                      key={member}
+                      className={`w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold text-white`}
+                    >
+                      {member.split(' ').map(n => n[0]).join('').toUpperCase()}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                className="btn-primary flex-1 py-3 disabled:opacity-40"
+                onClick={handleAddMember}
+                disabled={!newMemberName.trim()}
+              >
+                Add 👥
+              </button>
+              <button
+                className="btn-secondary flex-1 py-3"
+                onClick={() => { setShowAddMember(false); setNewMemberName('') }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

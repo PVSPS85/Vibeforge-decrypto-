@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
 
 const ExpenseSchema = new mongoose.Schema({
-  description: {
+  title: {
     type: String,
-    required: [true, 'Please add a description'],
+    required: [true, 'Please add a title'],
+    trim: true,
   },
   amount: {
     type: Number,
@@ -14,10 +15,15 @@ const ExpenseSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
+  participants: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    }
+  ],
   group: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Group',
-    required: true,
   },
   split: [
     {

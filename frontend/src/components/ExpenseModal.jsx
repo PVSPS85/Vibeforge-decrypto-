@@ -8,12 +8,22 @@ const MEMBERS = [
 ]
 
 const CATEGORIES = ['🍕 Food', '🏠 Home', '✈️ Travel', '🎮 Fun', '💡 Bills', '🛒 Shopping']
+const COLOR_OPTIONS = ['bg-purple-500', 'bg-cyan-500', 'bg-pink-500', 'bg-yellow-500', 'bg-green-500']
 
-export default function ExpenseModal({ groupId, onAdded, onClose }) {
+export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
+  // Convert members prop to objects if provided, otherwise use fallback
+  const membersList = members && members.length > 0
+    ? members.map((name, index) => ({
+        name,
+        initials: name.slice(0, 2).toUpperCase(),
+        color: COLOR_OPTIONS[index % COLOR_OPTIONS.length]
+      }))
+    : MEMBERS
+
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
-  const [paidBy, setPaidBy] = useState('Pranav')
-  const [splitAmong, setSplitAmong] = useState(['Pranav', 'Rahul', 'Sneha', 'Arjun'])
+  const [paidBy, setPaidBy] = useState(membersList[0]?.name || 'Pranav')
+  const [splitAmong, setSplitAmong] = useState(membersList.map(m => m.name))
   const [category, setCategory] = useState('🍕 Food')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
@@ -115,7 +125,7 @@ export default function ExpenseModal({ groupId, onAdded, onClose }) {
             <div>
               <label className="text-xs text-gray-400 mb-1.5 block font-semibold uppercase tracking-wide">Paid By</label>
               <div className="flex gap-2">
-                {MEMBERS.map(m => (
+                {membersList.map(m => (
                   <button
                     key={m.name}
                     onClick={() => setPaidBy(m.name)}
@@ -135,7 +145,7 @@ export default function ExpenseModal({ groupId, onAdded, onClose }) {
                 Split Among ({splitAmong.length} people · ₹{perPerson} each)
               </label>
               <div className="flex gap-2">
-                {MEMBERS.map(m => (
+                {membersList.map(m => (
                   <button
                     key={m.name}
                     onClick={() => toggleMember(m.name)}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWeb3 } from '../context/Web3Context'
 
@@ -30,7 +30,7 @@ function launchConfetti() {
 function Toast({ toasts }) {
   return (
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
-      {toasts.map(t => (
+      {Array.isArray(toasts) && toasts.map(t => (
         <div
           key={t.id}
           className={`flex items-center gap-3 px-5 py-3 rounded-2xl border backdrop-blur-md shadow-2xl
@@ -118,34 +118,7 @@ function XPBar({ xp, maxXp, level }) {
 }
 
 // ═══ INITIAL DATA ═══
-const INITIAL_GROUPS = [
-  {
-    id: '1',
-    name: 'House Squad',
-    emoji: '🏠',
-    tag: 'Home',
-    tagColor: 'bg-purple-500/20 text-purple-300',
-    members: ['AK', 'PS', 'JT', 'GW'],
-    memberColors: ['bg-purple-500', 'bg-cyan-500', 'bg-yellow-500', 'bg-green-500'],
-    totalExpense: 180,
-    settled: 137.5,
-    yourBalance: -42.50,
-    memberCount: 4,
-  },
-  {
-    id: '2',
-    name: 'Weekend Crew',
-    emoji: '🎮',
-    tag: 'Fun',
-    tagColor: 'bg-yellow-500/20 text-yellow-300',
-    members: ['MR', 'CL', 'AK', 'DP'],
-    memberColors: ['bg-pink-500', 'bg-cyan-400', 'bg-orange-400', 'bg-red-400'],
-    totalExpense: 250,
-    settled: 182.8,
-    yourBalance: 67.20,
-    memberCount: 4,
-  },
-]
+const INITIAL_GROUPS = []
 
 const TAG_EMOJIS = { Fun: '🎮', Home: '🏠', Travel: '✈️', Food: '🍕', Work: '💼' }
 
@@ -171,6 +144,9 @@ export default function Dashboard() {
   })
   const [mounted, setMounted] = useState(false)
 
+  // Clear old localStorage on first load
+  useEffect(() => { localStorage.clear() }, [])
+
   const maxXp = 3500
   const level = Math.floor(xp / 500) + 1
 
@@ -187,10 +163,16 @@ export default function Dashboard() {
 
   const handleCreateGroup = () => {
     if (!groupName.trim()) return
+
+    if (Array.isArray(groups) && groups.find(g => g.name.toLowerCase() === groupName.trim().toLowerCase())) {
+      addToast({ type: 'error', icon: '⚠️', title: 'Group already exists!', sub: 'Choose a different name' })
+      return
+    }
+
     const emoji = TAG_EMOJIS[groupTag] || '✨'
     const newGroup = {
       id: Date.now().toString(),
-      name: groupName,
+      name: groupName.trim(),
       emoji,
       tag: groupTag,
       tagColor: 'bg-cyan-500/20 text-cyan-300',
@@ -219,9 +201,15 @@ export default function Dashboard() {
     setTimeout(() => addToast({ type: 'xp', icon: '⚡', title: 'XP Gained!', sub: 'Keep splitting to level up' }), 800)
   }
 
-  const youOwe = 57.50
-  const youGetBack = 89.20
-  const netBalance = youGetBack - youOwe
+  const youOwe = useMemo(() => {
+    if (!Array.isArray(groups) || groups.length === 0) return 0
+    return groups.filter(g => g.yourBalance < 0).reduce((sum, g) => sum + Math.abs(g.yourBalance), 0)
+  }, [groups])
+  const youGetBack = useMemo(() => {
+    if (!Array.isArray(groups) || groups.length === 0) return 0
+    return groups.filter(g => g.yourBalance > 0).reduce((sum, g) => sum + g.yourBalance, 0)
+  }, [groups])
+  const netBalance = useMemo(() => youGetBack - youOwe, [youGetBack, youOwe])
 
   return (
     <div className={`min-h-screen bg-vibe-bg bg-grid px-4 md:px-8 py-8 pt-24 transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
@@ -255,9 +243,9 @@ export default function Dashboard() {
         {/* Balance Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {[
-            { label: 'You Owe', value: youOwe, color: 'red', icon: '📤', arrow: '↘', sub: 'Across 2 groups' },
-            { label: 'You Get Back', value: youGetBack, color: 'green', icon: '📥', arrow: '↗', sub: 'From 3 friends' },
-            { label: 'Net Balance', value: netBalance, color: 'purple', icon: '⚖️', arrow: '—', sub: 'Looking good! 🎉', prefix: '+₹' },
+            { label: 'You Owe', value: isNaN(youOwe) ? 0 : youOwe, color: 'red', icon: '📤', arrow: '↘', sub: `Across ${Array.isArray(groups) ? groups.filter(g => g.yourBalance < 0).length : 0} groups` },
+            { label: 'You Get Back', value: isNaN(youGetBack) ? 0 : youGetBack, color: 'green', icon: '📥', arrow: '↗', sub: `From ${Array.isArray(groups) ? groups.filter(g => g.yourBalance > 0).length : 0} friends` },
+            { label: 'Net Balance', value: isNaN(netBalance) ? 0 : netBalance, color: 'purple', icon: '⚖️', arrow: '—', sub: (isNaN(netBalance) ? 0 : netBalance) >= 0 ? 'Looking good! 🎉' : 'Time to settle up! 💸', prefix: '₹' },
           ].map((card, i) => (
             <div
               key={i}
@@ -302,7 +290,7 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {groups.map((group, idx) => (
+              {Array.isArray(groups) && groups.map((group, idx) => (
                 <div
                   key={group.id}
                   onClick={() => navigate(`/group/${group.id}`)}
@@ -326,7 +314,7 @@ export default function Dashboard() {
                   </div>
 
                   <div className="flex gap-1 mb-3">
-                    {group.members.map((m, i) => (
+                    {Array.isArray(group.members) && group.members.map((m, i) => (
                       <div
                         key={i}
                         className={`w-8 h-8 rounded-full ${group.memberColors[i] || 'bg-gray-600'} flex items-center justify-center text-xs font-bold text-white border-2 border-vibe-bg`}
@@ -403,7 +391,7 @@ export default function Dashboard() {
             <div className="glass-card p-5 mt-4 space-y-3">
               <p className="font-display font-bold text-white text-sm mb-2">📊 Your Stats</p>
               {[
-                { label: 'Groups Joined', value: groups.length, icon: '👥' },
+                { label: 'Groups Joined', value: Array.isArray(groups) ? groups.length : 0, icon: '👥' },
                 { label: 'Total XP', value: xp.toLocaleString(), icon: '⚡' },
                 { label: 'Settled Bills', value: '12', icon: '✅' },
               ].map(s => (

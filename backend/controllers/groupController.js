@@ -47,7 +47,7 @@ exports.addMemberToGroup = async (req, res) => {
 // @route   GET /api/groups
 exports.getGroups = async (req, res) => {
   try {
-    const groups = await Group.find().populate('members', 'username walletAddress');
+    const groups = await Group.find().populate('members', 'name walletAddress');
     res.status(200).json({ success: true, data: groups });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -58,7 +58,7 @@ exports.getGroups = async (req, res) => {
 // @route   GET /api/groups/:id
 exports.getGroupById = async (req, res) => {
   try {
-    const group = await Group.findById(req.params.id).populate('members', 'username walletAddress');
+    const group = await Group.findById(req.params.id).populate('members', 'name walletAddress');
     if (!group) return res.status(404).json({ success: false, error: 'Group not found' });
     
     res.status(200).json({ success: true, data: group });
