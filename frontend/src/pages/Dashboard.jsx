@@ -11,25 +11,29 @@ function launchConfetti() {
     el.className = 'confetti-piece'
     el.innerText = shapes[Math.floor(Math.random() * shapes.length)]
     el.style.cssText = `
+      position: fixed;
+      top: -20px;
       left: ${Math.random() * 100}vw;
       color: ${colors[Math.floor(Math.random() * colors.length)]};
       font-size: ${8 + Math.random() * 14}px;
-      animation-duration: ${2 + Math.random() * 3}s;
+      animation: confettiFall ${2 + Math.random() * 3}s ease-in forwards;
       animation-delay: ${Math.random() * 1.5}s;
+      pointer-events: none;
+      z-index: 9999;
     `
     document.body.appendChild(el)
     setTimeout(() => el.remove(), 5000)
   }
 }
 
-// ═══ TOAST ENGINE ═══
+// ═══ TOAST ═══
 function Toast({ toasts }) {
   return (
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
       {toasts.map(t => (
         <div
           key={t.id}
-          className={`toast flex items-center gap-3 px-5 py-3 rounded-2xl border backdrop-blur-md shadow-2xl
+          className={`flex items-center gap-3 px-5 py-3 rounded-2xl border backdrop-blur-md shadow-2xl
             ${t.type === 'success' ? 'bg-green-500/20 border-green-500/40 text-green-300' :
               t.type === 'xp' ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-300' :
               t.type === 'error' ? 'bg-red-500/20 border-red-500/40 text-red-300' :
@@ -46,7 +50,7 @@ function Toast({ toasts }) {
   )
 }
 
-// ═══ ANIMATED COUNTER ═══
+// ═══ ANIMATED NUMBER ═══
 function AnimatedNumber({ value, prefix = '₹', decimals = 0 }) {
   const [display, setDisplay] = useState(0)
   const ref = useRef(null)
@@ -78,10 +82,10 @@ function XPBar({ xp, maxXp, level }) {
   }, [xp, maxXp])
 
   return (
-    <div className="glass-card p-5 mb-8 animate-border-glow">
+    <div className="glass-card p-5 mb-8">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-lg font-bold animate-pulse-slow">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-lg font-bold">
             {level}
           </div>
           <div>
@@ -90,24 +94,16 @@ function XPBar({ xp, maxXp, level }) {
           </div>
         </div>
         <p className="text-yellow-400 font-bold font-mono text-sm">
-          <AnimatedNumber value={xp} prefix="" /> / {maxXp.toLocaleString()} XP
+          {xp.toLocaleString()} / {maxXp.toLocaleString()} XP
         </p>
       </div>
       <div className="h-4 rounded-full bg-vibe-border overflow-hidden relative">
         <div
-          className="h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden"
+          className="h-full rounded-full transition-all duration-1000 ease-out"
           style={{
             width: `${width}%`,
             background: 'linear-gradient(90deg, #7c3aed, #a855f7, #06b6d4)',
           }}
-        >
-          {/* Shimmer on bar */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer-bar" />
-        </div>
-        {/* Glow dot at tip */}
-        <div
-          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] transition-all duration-1000"
-          style={{ left: `calc(${width}% - 8px)` }}
         />
       </div>
       <div className="flex gap-2 mt-3 flex-wrap">
@@ -124,37 +120,59 @@ function XPBar({ xp, maxXp, level }) {
 // ═══ INITIAL DATA ═══
 const INITIAL_GROUPS = [
   {
-    id: '1', name: 'House Squad', emoji: '🏠', tag: 'Home',
+    id: '1',
+    name: 'House Squad',
+    emoji: '🏠',
+    tag: 'Home',
     tagColor: 'bg-purple-500/20 text-purple-300',
     members: ['AK', 'PS', 'JT', 'GW'],
     memberColors: ['bg-purple-500', 'bg-cyan-500', 'bg-yellow-500', 'bg-green-500'],
-    totalExpense: 180, settled: 137.5, yourBalance: -42.50, memberCount: 4,
+    totalExpense: 180,
+    settled: 137.5,
+    yourBalance: -42.50,
+    memberCount: 4,
   },
   {
-    id: '2', name: 'Weekend Crew', emoji: '🎮', tag: 'Fun',
+    id: '2',
+    name: 'Weekend Crew',
+    emoji: '🎮',
+    tag: 'Fun',
     tagColor: 'bg-yellow-500/20 text-yellow-300',
     members: ['MR', 'CL', 'AK', 'DP'],
     memberColors: ['bg-pink-500', 'bg-cyan-400', 'bg-orange-400', 'bg-red-400'],
-    totalExpense: 250, settled: 182.8, yourBalance: 67.20, memberCount: 4,
+    totalExpense: 250,
+    settled: 182.8,
+    yourBalance: 67.20,
+    memberCount: 4,
   },
 ]
 
 const TAG_EMOJIS = { Fun: '🎮', Home: '🏠', Travel: '✈️', Food: '🍕', Work: '💼' }
 
-// ═══ MAIN COMPONENT ═══
+// ═══ MAIN DASHBOARD ═══
 export default function Dashboard() {
   const { account } = useWeb3()
   const navigate = useNavigate()
-  const [groups, setGroups] = useState(INITIAL_GROUPS)
+
+  const [groups, setGroups] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vibeforge_groups')
+      return saved ? JSON.parse(saved) : INITIAL_GROUPS
+    } catch { return INITIAL_GROUPS }
+  })
+
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [groupTag, setGroupTag] = useState('Fun')
   const [toasts, setToasts] = useState([])
-  const [xp, setXp] = useState(2840)
+  const [xp, setXp] = useState(() => {
+    try { return parseInt(localStorage.getItem('vibeforge_xp') || '2840') }
+    catch { return 2840 }
+  })
   const [mounted, setMounted] = useState(false)
 
   const maxXp = 3500
-  const level = 7
+  const level = Math.floor(xp / 500) + 1
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 100)
@@ -176,17 +194,26 @@ export default function Dashboard() {
       emoji,
       tag: groupTag,
       tagColor: 'bg-cyan-500/20 text-cyan-300',
-      members: ['YO'],
+      members: ['ME'],
       memberColors: ['bg-purple-500'],
       totalExpense: 0,
       settled: 0,
       yourBalance: 0,
       memberCount: 1,
     }
-    setGroups(prev => [...prev, newGroup])
+
+    setGroups(prev => {
+      const updated = [...prev, newGroup]
+      localStorage.setItem('vibeforge_groups', JSON.stringify(updated))
+      return updated
+    })
+
+    const newXp = xp + 100
+    setXp(newXp)
+    localStorage.setItem('vibeforge_xp', newXp.toString())
+
     setGroupName('')
     setShowNewGroup(false)
-    setXp(prev => prev + 100)
     launchConfetti()
     addToast({ type: 'success', icon: '🎉', title: 'Group Created!', sub: '+100 XP earned' })
     setTimeout(() => addToast({ type: 'xp', icon: '⚡', title: 'XP Gained!', sub: 'Keep splitting to level up' }), 800)
@@ -200,14 +227,14 @@ export default function Dashboard() {
     <div className={`min-h-screen bg-vibe-bg bg-grid px-4 md:px-8 py-8 pt-24 transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
       <div className="max-w-6xl mx-auto">
 
-        {/* ── Header ── */}
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8 animate-slide-up">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="font-display text-4xl md:text-5xl font-extrabold text-white">
                 Quest Dashboard
               </h1>
-              <span className="px-3 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 text-xs font-bold animate-pulse-slow">
+              <span className="px-3 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 text-xs font-bold">
                 ⚡ Lv.{level}
               </span>
             </div>
@@ -225,8 +252,8 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* ── Balance Cards ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 stagger-children">
+        {/* Balance Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {[
             { label: 'You Owe', value: youOwe, color: 'red', icon: '📤', arrow: '↘', sub: 'Across 2 groups' },
             { label: 'You Get Back', value: youGetBack, color: 'green', icon: '📥', arrow: '↗', sub: 'From 3 friends' },
@@ -234,9 +261,8 @@ export default function Dashboard() {
           ].map((card, i) => (
             <div
               key={i}
-              className={`glass-card p-6 card-hover animate-slide-up`}
+              className="glass-card p-6"
               style={{
-                animationDelay: `${i * 0.1}s`,
                 background: card.color === 'red' ? 'rgba(239,68,68,0.08)' : card.color === 'green' ? 'rgba(16,185,129,0.08)' : 'rgba(124,58,237,0.08)',
                 borderColor: card.color === 'red' ? 'rgba(239,68,68,0.25)' : card.color === 'green' ? 'rgba(16,185,129,0.25)' : 'rgba(124,58,237,0.25)',
               }}
@@ -257,10 +283,10 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* ── XP Bar ── */}
+        {/* XP Bar */}
         <XPBar xp={xp} maxXp={maxXp} level={level} />
 
-        {/* ── Groups + Leaderboard ── */}
+        {/* Groups + Leaderboard */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Groups */}
@@ -269,21 +295,19 @@ export default function Dashboard() {
               <h2 className="font-display text-xl font-bold text-white">🎮 Your Groups</h2>
               <button
                 onClick={() => setShowNewGroup(true)}
-                className="text-vibe-violet text-sm hover:text-white transition-colors flex items-center gap-1"
+                className="text-vibe-violet text-sm hover:text-white transition-colors"
               >
-                New Group <span className="text-lg">+</span>
+                New Group +
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 stagger-children">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {groups.map((group, idx) => (
                 <div
                   key={group.id}
                   onClick={() => navigate(`/group/${group.id}`)}
-                  className="glass-card p-5 cursor-pointer card-hover animate-slide-up border border-vibe-border"
-                  style={{ animationDelay: `${idx * 0.08}s` }}
+                  className="glass-card p-5 cursor-pointer border border-vibe-border hover:border-vibe-purple/50 transition-all hover:scale-[1.02]"
                 >
-                  {/* Top row */}
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="font-display font-bold text-white text-lg">
@@ -301,29 +325,29 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Member avatars */}
                   <div className="flex gap-1 mb-3">
                     {group.members.map((m, i) => (
                       <div
                         key={i}
-                        title={m}
-                        className={`w-8 h-8 rounded-full ${group.memberColors[i] || 'bg-gray-600'} flex items-center justify-center text-xs font-bold text-white border-2 border-vibe-bg transition-transform hover:scale-110 hover:z-10`}
+                        className={`w-8 h-8 rounded-full ${group.memberColors[i] || 'bg-gray-600'} flex items-center justify-center text-xs font-bold text-white border-2 border-vibe-bg`}
                         style={{ marginLeft: i > 0 ? '-6px' : '0' }}
                       >
                         {m}
                       </div>
                     ))}
-                    <div className="w-8 h-8 rounded-full bg-vibe-border flex items-center justify-center text-xs text-gray-400 border-2 border-vibe-bg" style={{ marginLeft: '-6px' }}>
+                    <div
+                      className="w-8 h-8 rounded-full bg-vibe-border flex items-center justify-center text-xs text-gray-400 border-2 border-vibe-bg"
+                      style={{ marginLeft: '-6px' }}
+                    >
                       +{group.memberCount}
                     </div>
                   </div>
 
-                  {/* Progress */}
                   {group.totalExpense > 0 ? (
                     <>
                       <div className="h-2 rounded-full bg-vibe-border overflow-hidden mb-1">
                         <div
-                          className="h-full rounded-full transition-all duration-1000"
+                          className="h-full rounded-full"
                           style={{
                             width: `${Math.min((group.settled / group.totalExpense) * 100, 100)}%`,
                             background: 'linear-gradient(90deg, #7c3aed, #06b6d4)',
@@ -344,7 +368,7 @@ export default function Dashboard() {
               {/* Add group card */}
               <div
                 onClick={() => setShowNewGroup(true)}
-                className="glass-card p-5 cursor-pointer card-hover border border-dashed border-vibe-border flex items-center justify-center gap-3 text-gray-500 hover:text-vibe-violet hover:border-vibe-purple/50 min-h-[160px]"
+                className="glass-card p-5 cursor-pointer border border-dashed border-vibe-border flex items-center justify-center gap-3 text-gray-500 hover:text-vibe-violet hover:border-vibe-purple/50 transition-all min-h-[160px]"
               >
                 <span className="text-3xl">+</span>
                 <span className="font-display font-semibold">New Group</span>
@@ -357,16 +381,12 @@ export default function Dashboard() {
             <h2 className="font-display text-xl font-bold text-white mb-4">🏆 Leaderboard</h2>
             <div className="glass-card p-5 space-y-4">
               {[
-                { rank: 1, initials: 'PS', name: 'Priya S', title: '⚡ Debt Crusher', xp: '2.8k', color: 'bg-pink-500', medal: '🥇' },
-                { rank: 2, initials: 'MR', name: 'Maya R', title: '🚀 Fast Payer', xp: '2.2k', color: 'bg-cyan-500', medal: '🥈' },
-                { rank: 3, initials: 'AK', name: 'Alex Kim', title: '🏆 Group Hero', xp: '2.0k', color: 'bg-orange-400', medal: '🥉' },
-                { rank: 4, initials: 'JT', name: 'Jordan T', title: '⭐ Rising Star', xp: '1.5k', color: 'bg-yellow-500', medal: '4' },
+                { initials: 'PS', name: 'Priya S', title: '⚡ Debt Crusher', xp: '2.8k', color: 'bg-pink-500', medal: '🥇' },
+                { initials: 'MR', name: 'Maya R', title: '🚀 Fast Payer', xp: '2.2k', color: 'bg-cyan-500', medal: '🥈' },
+                { initials: 'AK', name: 'Alex Kim', title: '🏆 Group Hero', xp: '2.0k', color: 'bg-orange-400', medal: '🥉' },
+                { initials: 'JT', name: 'Jordan T', title: '⭐ Rising Star', xp: '1.5k', color: 'bg-yellow-500', medal: '4' },
               ].map((p, i) => (
-                <div
-                  key={p.rank}
-                  className={`flex items-center gap-3 p-2 rounded-xl transition-all hover:bg-vibe-border/30 animate-slide-up`}
-                  style={{ animationDelay: `${i * 0.1}s` }}
-                >
+                <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-vibe-border/30 transition-all">
                   <span className="text-lg w-6 text-center">{p.medal}</span>
                   <div className={`w-9 h-9 rounded-full ${p.color} flex items-center justify-center text-xs font-bold text-white`}>
                     {p.initials}
@@ -380,18 +400,15 @@ export default function Dashboard() {
               ))}
             </div>
 
-            {/* Quick stats */}
             <div className="glass-card p-5 mt-4 space-y-3">
               <p className="font-display font-bold text-white text-sm mb-2">📊 Your Stats</p>
               {[
                 { label: 'Groups Joined', value: groups.length, icon: '👥' },
-                { label: 'Total XP', value: `${xp.toLocaleString()}`, icon: '⚡' },
+                { label: 'Total XP', value: xp.toLocaleString(), icon: '⚡' },
                 { label: 'Settled Bills', value: '12', icon: '✅' },
               ].map(s => (
                 <div key={s.label} className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400 flex items-center gap-2">
-                    {s.icon} {s.label}
-                  </span>
+                  <span className="text-xs text-gray-400 flex items-center gap-2">{s.icon} {s.label}</span>
                   <span className="text-sm font-bold text-white">{s.value}</span>
                 </div>
               ))}
@@ -400,10 +417,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── New Group Modal ── */}
+      {/* New Group Modal */}
       {showNewGroup && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-          <div className="glass-card p-8 w-full max-w-md animate-slide-up neon-border">
+          <div className="glass-card p-8 w-full max-w-md animate-slide-up">
             <h3 className="font-display text-2xl font-bold mb-1">New Group ✨</h3>
             <p className="text-gray-400 text-sm mb-6">Create a squad, start splitting</p>
 
@@ -430,7 +447,7 @@ export default function Dashboard() {
                       className={`px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1 ${
                         groupTag === tag
                           ? 'bg-vibe-purple text-white scale-105'
-                          : 'bg-vibe-border text-gray-400 hover:text-white hover:bg-vibe-border/80'
+                          : 'bg-vibe-border text-gray-400 hover:text-white'
                       }`}
                     >
                       {emoji} {tag}
@@ -459,7 +476,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Toasts ── */}
       <Toast toasts={toasts} />
     </div>
   )

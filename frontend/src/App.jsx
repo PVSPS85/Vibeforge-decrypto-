@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import LandingPage from './pages/LandingPage'
 import ConnectPage from './pages/ConnectPage'
 import Dashboard from './pages/Dashboard'
@@ -16,6 +16,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/connect" element={<ConnectPage />} />
+        {/* These pages work with OR without wallet — for demo */}
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/group/:id" element={<GroupPage />} />
         <Route path="/activity" element={<ActivityPage />} />
