@@ -10,24 +10,19 @@ const ExpenseSchema = new mongoose.Schema({
     type: Number,
     required: [true, 'Please add an amount'],
   },
+  category: { type: String, default: '💸 General' },
   paidBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String, // Wallet Address
     required: true,
+    lowercase: true
   },
-  participants: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-    }
-  ],
   group: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Group',
   },
   split: [
     {
-      user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      user: { type: String, lowercase: true }, // Wallet Address
       amount: { type: Number, required: true },
     }
   ],

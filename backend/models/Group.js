@@ -6,19 +6,18 @@ const GroupSchema = new mongoose.Schema({
     required: [true, 'Please add a group name'],
     trim: true,
   },
-  description: {
-    type: String,
-    maxlength: [200, 'Description cannot be more than 200 characters'],
-  },
+  emoji: { type: String, default: '✨' },
+  tag: { type: String, default: 'Fun' },
+  tagColor: { type: String, default: 'bg-cyan-500/20 text-cyan-300' },
   admin: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String, // Wallet address
     required: true,
+    lowercase: true
   },
   members: [
     {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: String, // Wallet addresses
+      lowercase: true
     },
   ],
   createdAt: {

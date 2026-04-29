@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import ExpenseModal from '../components/ExpenseModal'
+import { useContract } from '../hooks/useContract'
 
 export default function GroupPage() {
   const { id } = useParams()
@@ -12,62 +13,71 @@ export default function GroupPage() {
   const [paying, setPaying] = useState(null)
   const [showConfetti, setShowConfetti] = useState(false)
 
-  // Load expenses from localStorage
-  const [expenses, setExpenses] = useState(() => {
-    try {
-      const saved = localStorage.getItem(`expenses_group_${id}`)
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
-  })
+  const [expenses, setExpenses] = useState([])
+  const [members, setMembers] = useState([])
+  const [group, setGroup] = useState({ name: 'Loading...', emoji: '🏖️' })
 
-  // Load members from localStorage
-  const [members, setMembers] = useState(() => {
-    try {
-      const saved = localStorage.getItem(`members_group_${id}`)
-      return saved ? JSON.parse(saved) : ['Pranav']
-    } catch {
-      return ['Pranav']
-    }
-  })
+  // Fetch Group & Expenses from API
+  useEffect(() => {
+    const fetchGroupData = async () => {
+      try {
+        const [groupRes, expRes] = await Promise.all([
+          fetch(`http://localhost:5005/api/groups/${id}`),
+          fetch(`http://localhost:5005/api/expenses/group/${id}`)
+        ])
+        
+        const groupData = await groupRes.json()
+        const expData = await expRes.json()
 
-  // Load group from localStorage
-  const group = (() => {
-    try {
-      const saved = localStorage.getItem('vibeforge_groups')
-      const groups = saved ? JSON.parse(saved) : []
-      return groups.find(g => g.id === id) || { name: 'Group', emoji: '🏖️' }
-    } catch {
-      return { name: 'Group', emoji: '🏖️' }
+        if (groupData.success) {
+          setGroup(groupData.data)
+          // Use the populated user objects from the backend instead of just wallet addresses
+          setMembers(groupData.data.populatedMembers || [])
+        }
+        if (expData.success) {
+          setExpenses(expData.data)
+        }
+      } catch (err) {
+        console.error('Failed to load group data:', err)
+      }
     }
-  })()
+    fetchGroupData()
+  }, [id])
 
   // Calculate balances dynamically from expenses
   const balances = (() => {
     const balanceMap = {}
-    members.forEach(member => balanceMap[member] = 0)
+    members.forEach(member => {
+      if (member && member.walletAddress) {
+        balanceMap[member.walletAddress.toLowerCase()] = 0
+      }
+    })
 
     expenses.forEach(exp => {
       const splitCount = exp.split.length
       const share = exp.amount / splitCount
       exp.split.forEach(person => {
-        if (person !== exp.paidBy.name) {
-          if (balanceMap[person] !== undefined) {
-            balanceMap[person] -= share
+        const personWallet = (person.user || person).toLowerCase()
+        const payerWallet = (exp.paidBy.walletAddress || exp.paidBy).toLowerCase()
+        
+        if (personWallet !== payerWallet) {
+          if (balanceMap[personWallet] !== undefined) {
+            balanceMap[personWallet] -= share
           }
-          if (balanceMap[exp.paidBy.name] !== undefined) {
-            balanceMap[exp.paidBy.name] += share
+          if (balanceMap[payerWallet] !== undefined) {
+            balanceMap[payerWallet] += share
           }
         }
       })
     })
 
     return members.map((member, index) => ({
-      name: member,
-      initials: member.split(' ').map(n => n[0]).join('').toUpperCase(),
+      name: member.displayName || 'Unknown User',
+      walletAddress: member.walletAddress,
+      appUid: member.appUid,
+      initials: (member.displayName || 'U').slice(0, 2).toUpperCase(),
       color: ['bg-purple-500', 'bg-cyan-500', 'bg-yellow-500', 'bg-green-500'][index % 4],
-      owes: Math.round(balanceMap[member] * 100) / 100,
+      owes: Math.round((balanceMap[member.walletAddress?.toLowerCase()] || 0) * 100) / 100,
       settled: false
     }))
   })()
@@ -77,15 +87,30 @@ export default function GroupPage() {
   const settledAmount = balances.filter(b => b.settled && b.owes > 0).reduce((s, b) => s + b.owes, 0)
   const settleProgress = totalExpense > 0 ? (settledAmount / totalExpense) * 100 : 0
 
-  const handlePay = async (name) => {
+  const { settleDebt } = useContract()
+
+  const handlePay = async (name, amount) => {
     setPaying(name)
+    try {
+      // Attempt blockchain settlement
+      // We pass the amount as a string/Wei roughly. If contract fails, app won't break.
+      await settleDebt(id, name, amount.toString())
+    } catch (err) {
+      console.warn("Contract settlement skipped or failed:", err)
+    }
+    // Simulate API success for demo purposes
     await new Promise(r => setTimeout(r, 1500))
     setPaying(null)
   }
 
   const handleSettleAll = async () => {
     setPaying('all')
-    await new Promise(r => setTimeout(r, 2000))
+    try {
+      // You can loop over balances here to settle on chain when ready
+      await new Promise(r => setTimeout(r, 2000))
+    } catch (err) {
+      console.warn("Contract settlement skipped")
+    }
     setPaying(null)
     setShowConfetti(true)
     setTimeout(() => setShowConfetti(false), 3000)
@@ -93,26 +118,35 @@ export default function GroupPage() {
 
   const handleAddExpense = (newExpense) => {
     if (!newExpense) return
-    const updated = [newExpense, ...expenses]
-    setExpenses(updated)
-    try {
-      localStorage.setItem(`expenses_group_${id}`, JSON.stringify(updated))
-    } catch (error) {
-      console.error('Error saving expenses:', error)
-    }
+    setExpenses(prev => [newExpense, ...prev])
   }
 
-  const handleAddMember = () => {
+  const handleAddMember = async () => {
     if (!newMemberName.trim()) return
-    const updated = [...members, newMemberName.trim()]
-    setMembers(updated)
+    const uid = newMemberName.trim().toUpperCase()
+    
     try {
-      localStorage.setItem(`members_group_${id}`, JSON.stringify(updated))
-    } catch (error) {
-      console.error('Error saving members:', error)
+      const res = await fetch(`http://localhost:5005/api/groups/${id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appUid: uid })
+      })
+      const data = await res.json()
+      if (data.success) {
+        // Refresh the entire group to get the newly populated user object
+        const groupRes = await fetch(`http://localhost:5005/api/groups/${id}`)
+        const refreshedData = await groupRes.json()
+        if (refreshedData.success) {
+           setMembers(refreshedData.data.populatedMembers || [])
+        }
+        setNewMemberName('')
+        setShowAddMember(false)
+      } else {
+        alert(data.error || "Failed to add member")
+      }
+    } catch (err) {
+      console.error('Failed to add member:', err)
     }
-    setNewMemberName('')
-    setShowAddMember(false)
   }
 
   return (
@@ -237,7 +271,7 @@ export default function GroupPage() {
                     </div>
                     {b.owes > 0 && !b.settled && (
                       <button
-                        onClick={() => handlePay(b.name)}
+                        onClick={() => handlePay(b.name, b.owes)}
                         disabled={paying !== null}
                         className="px-3 py-1.5 rounded-xl bg-vibe-purple/20 border border-vibe-purple/30 text-vibe-violet text-xs font-bold hover:bg-vibe-purple/40 transition-all disabled:opacity-50"
                       >
@@ -292,10 +326,10 @@ export default function GroupPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-gray-400 mb-1.5 block font-semibold uppercase tracking-wide">Member Name</label>
+                <label className="text-xs text-gray-400 mb-1.5 block font-semibold uppercase tracking-wide">Enter UID (e.g. SS-4821)</label>
                 <input
-                  className="w-full bg-vibe-bg border border-vibe-border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-vibe-purple transition-colors"
-                  placeholder="e.g. John Doe"
+                  className="w-full bg-vibe-bg border border-vibe-border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-vibe-purple transition-colors uppercase"
+                  placeholder="e.g. SS-4821"
                   value={newMemberName}
                   onChange={e => setNewMemberName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddMember()}
@@ -308,10 +342,11 @@ export default function GroupPage() {
                 <div className="flex gap-2 flex-wrap">
                   {members.map((member, index) => (
                     <div
-                      key={member}
+                      key={member.walletAddress || index}
                       className={`w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold text-white`}
+                      title={`${member.displayName} (${member.appUid})`}
                     >
-                      {member.split(' ').map(n => n[0]).join('').toUpperCase()}
+                      {(member.displayName || 'U').slice(0, 2).toUpperCase()}
                     </div>
                   ))}
                 </div>

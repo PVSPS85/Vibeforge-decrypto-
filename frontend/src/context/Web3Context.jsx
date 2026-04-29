@@ -9,6 +9,7 @@ export function Web3Provider({ children }) {
   const [signer, setSigner] = useState(null)
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
 
   // Only auto-reconnect if user previously connected
   useEffect(() => {
@@ -19,9 +20,26 @@ export function Web3Provider({ children }) {
         const accounts = await _provider.send('eth_accounts', [])
         if (accounts.length > 0) {
           const _signer = await _provider.getSigner()
+          const walletAddress = accounts[0]
+          
+          // Ensure user is registered in the backend
+          try {
+            const res = await fetch('http://localhost:5005/api/users', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: 'User', walletAddress })
+            })
+            const data = await res.json()
+            if (data.success) {
+              setUserProfile(data.data)
+            }
+          } catch (apiErr) {
+            console.error('Failed to register user to backend:', apiErr)
+          }
+
           setProvider(_provider)
           setSigner(_signer)
-          setAccount(accounts[0])
+          setAccount(walletAddress)
         }
         // If no accounts, stay on connect page — don't redirect
       } catch (e) {
@@ -36,8 +54,10 @@ export function Web3Provider({ children }) {
           setAccount(null)
           setProvider(null)
           setSigner(null)
+          setUserProfile(null)
         } else {
           setAccount(accounts[0])
+          // Don't auto fetch profile here, a reload is safer for dapp state
         }
       })
     }
@@ -54,9 +74,26 @@ export function Web3Provider({ children }) {
       const _provider = new ethers.BrowserProvider(window.ethereum)
       const accounts = await _provider.send('eth_requestAccounts', [])
       const _signer = await _provider.getSigner()
+      const walletAddress = accounts[0]
+
+      // Ensure user is registered in the backend
+      try {
+        const res = await fetch('http://localhost:5005/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'User', walletAddress })
+        })
+        const data = await res.json()
+        if (data.success) {
+          setUserProfile(data.data)
+        }
+      } catch (apiErr) {
+        console.error('Failed to register user to backend:', apiErr)
+      }
+
       setProvider(_provider)
       setSigner(_signer)
-      setAccount(accounts[0])
+      setAccount(walletAddress)
     } catch (err) {
       setError('Connection rejected. Please try again.')
     } finally {
@@ -68,12 +105,13 @@ export function Web3Provider({ children }) {
     setAccount(null)
     setProvider(null)
     setSigner(null)
+    setUserProfile(null)
   }, [])
 
   return (
     <Web3Context.Provider value={{
       account, provider, signer,
-      isConnecting, error,
+      isConnecting, error, userProfile, setUserProfile,
       connectWallet, disconnectWallet
     }}>
       {children}

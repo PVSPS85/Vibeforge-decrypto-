@@ -1,10 +1,16 @@
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
-  name: {
+  displayName: {
     type: String,
-    required: [true, 'Please add a name'],
+    required: [true, 'Please add a display name'],
     trim: true,
+  },
+  appUid: {
+    type: String,
+    required: [true, 'Please add an app UID'],
+    unique: true,
+    uppercase: true,
   },
   walletAddress: {
     type: String,

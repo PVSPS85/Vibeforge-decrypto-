@@ -13,24 +13,25 @@ const COLOR_OPTIONS = ['bg-purple-500', 'bg-cyan-500', 'bg-pink-500', 'bg-yellow
 export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
   // Convert members prop to objects if provided, otherwise use fallback
   const membersList = members && members.length > 0
-    ? members.map((name, index) => ({
-        name,
-        initials: name.slice(0, 2).toUpperCase(),
+    ? members.map((userObj, index) => ({
+        name: userObj.displayName || 'Unknown',
+        walletAddress: userObj.walletAddress || `mock-${index}`,
+        initials: (userObj.displayName || 'U').slice(0, 2).toUpperCase(),
         color: COLOR_OPTIONS[index % COLOR_OPTIONS.length]
       }))
     : MEMBERS
 
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
-  const [paidBy, setPaidBy] = useState(membersList[0]?.name || 'Pranav')
-  const [splitAmong, setSplitAmong] = useState(membersList.map(m => m.name))
+  const [paidBy, setPaidBy] = useState(membersList[0]?.walletAddress || membersList[0]?.name)
+  const [splitAmong, setSplitAmong] = useState(membersList.map(m => m.walletAddress || m.name))
   const [category, setCategory] = useState('🍕 Food')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
 
-  const toggleMember = (name) => {
+  const toggleMember = (id) => {
     setSplitAmong(prev =>
-      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+      prev.includes(id) ? prev.filter(n => n !== id) : [...prev, id]
     )
   }
 
@@ -42,22 +43,31 @@ export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
     if (!title || !amount || splitAmong.length === 0) return
     setLoading(true)
 
-    await new Promise(r => setTimeout(r, 1000))
-
-    setLoading(false)
-    setDone(true)
-
-    if (onAdded) onAdded({
-      _id: Date.now().toString(),
-      title,
-      amount: parseFloat(amount),
-      paidBy: { name: paidBy },
-      split: splitAmong,
-      createdAt: new Date().toISOString(),
-      category,
-    })
-
-    setTimeout(() => onClose(), 1800)
+    try {
+      const res = await fetch('http://localhost:5005/api/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          amount: parseFloat(amount),
+          category,
+          paidBy,
+          groupId,
+          participants: splitAmong
+        })
+      })
+      const data = await res.json()
+      
+      if (data.success) {
+        setDone(true)
+        if (onAdded) onAdded(data.data)
+        setTimeout(() => onClose(), 1800)
+      }
+    } catch (err) {
+      console.error("Failed to add expense", err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -125,18 +135,22 @@ export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
             <div>
               <label className="text-xs text-gray-400 mb-1.5 block font-semibold uppercase tracking-wide">Paid By</label>
               <div className="flex gap-2">
-                {membersList.map(m => (
-                  <button
-                    key={m.name}
-                    onClick={() => setPaidBy(m.name)}
-                    className={`flex flex-col items-center gap-1 transition-all ${paidBy === m.name ? 'scale-110' : 'opacity-50 hover:opacity-75'}`}
-                  >
-                    <div className={`w-10 h-10 rounded-full ${m.color} flex items-center justify-center text-xs font-bold text-white border-2 ${paidBy === m.name ? 'border-white' : 'border-transparent'}`}>
-                      {m.initials}
-                    </div>
-                    <span className="text-xs text-gray-400">{m.name.slice(0, 4)}</span>
-                  </button>
-                ))}
+                {membersList.map(m => {
+                  const id = m.walletAddress || m.name
+                  const isSelected = paidBy === id
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => setPaidBy(id)}
+                      className={`flex flex-col items-center gap-1 transition-all ${isSelected ? 'scale-110' : 'opacity-50 hover:opacity-75'}`}
+                    >
+                      <div className={`w-10 h-10 rounded-full ${m.color} flex items-center justify-center text-xs font-bold text-white border-2 ${isSelected ? 'border-white' : 'border-transparent'}`}>
+                        {m.initials}
+                      </div>
+                      <span className="text-xs text-gray-400">{m.name.slice(0, 8)}</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -145,18 +159,22 @@ export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
                 Split Among ({splitAmong.length} people · ₹{perPerson} each)
               </label>
               <div className="flex gap-2">
-                {membersList.map(m => (
-                  <button
-                    key={m.name}
-                    onClick={() => toggleMember(m.name)}
-                    className={`flex flex-col items-center gap-1 transition-all ${splitAmong.includes(m.name) ? 'scale-110' : 'opacity-40 hover:opacity-60'}`}
-                  >
-                    <div className={`w-10 h-10 rounded-full ${m.color} flex items-center justify-center text-xs font-bold text-white border-2 ${splitAmong.includes(m.name) ? 'border-white' : 'border-transparent'}`}>
-                      {m.initials}
-                    </div>
-                    <span className="text-xs text-gray-400">{m.name.slice(0, 4)}</span>
-                  </button>
-                ))}
+                {membersList.map(m => {
+                  const id = m.walletAddress || m.name
+                  const isSelected = splitAmong.includes(id)
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => toggleMember(id)}
+                      className={`flex flex-col items-center gap-1 transition-all ${isSelected ? 'scale-110' : 'opacity-40 hover:opacity-60'}`}
+                    >
+                      <div className={`w-10 h-10 rounded-full ${m.color} flex items-center justify-center text-xs font-bold text-white border-2 ${isSelected ? 'border-white' : 'border-transparent'}`}>
+                        {m.initials}
+                      </div>
+                      <span className="text-xs text-gray-400">{m.name.slice(0, 8)}</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 

@@ -4,13 +4,15 @@ const Group = require('../models/Group');
 // @route   POST /api/groups
 exports.createGroup = async (req, res) => {
   try {
-    const { name, description, adminId } = req.body;
+    const { name, emoji, tag, tagColor, adminWallet } = req.body;
 
     const group = await Group.create({
       name,
-      description,
-      admin: adminId,
-      members: [adminId], // Admin is automatically a member
+      emoji,
+      tag,
+      tagColor,
+      admin: adminWallet.toLowerCase(),
+      members: [adminWallet.toLowerCase()], // Admin is automatically a member
     });
 
     res.status(201).json({ success: true, data: group });
@@ -24,17 +26,27 @@ exports.createGroup = async (req, res) => {
 exports.addMemberToGroup = async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
-    const { userId } = req.body;
+    const { appUid } = req.body;
 
     if (!group) {
       return res.status(404).json({ success: false, error: 'Group not found' });
     }
 
-    if (group.members.includes(userId)) {
+    // Find the user by appUid
+    const User = require('../models/User');
+    const userToAdd = await User.findOne({ appUid: appUid.toUpperCase() });
+    
+    if (!userToAdd) {
+      return res.status(404).json({ success: false, error: 'User with this UID not found' });
+    }
+
+    const walletAddress = userToAdd.walletAddress;
+
+    if (group.members.includes(walletAddress)) {
       return res.status(400).json({ success: false, error: 'User already in group' });
     }
 
-    group.members.push(userId);
+    group.members.push(walletAddress);
     await group.save();
 
     res.status(200).json({ success: true, data: group });
@@ -43,11 +55,23 @@ exports.addMemberToGroup = async (req, res) => {
   }
 };
 
-// @desc    Get all groups
-// @route   GET /api/groups
+// @desc    Get all groups for a user
+// @route   GET /api/groups?wallet=0x...
 exports.getGroups = async (req, res) => {
   try {
-    const groups = await Group.find().populate('members', 'name walletAddress');
+    const wallet = req.query.wallet;
+    let query = {};
+    if (wallet) {
+      query = { members: wallet.toLowerCase() };
+    }
+    const groups = await Group.find(query).lean();
+    
+    const User = require('../models/User');
+    for (let group of groups) {
+      const memberUsers = await User.find({ walletAddress: { $in: group.members } }).lean();
+      group.populatedMembers = memberUsers;
+    }
+    
     res.status(200).json({ success: true, data: groups });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -58,8 +82,15 @@ exports.getGroups = async (req, res) => {
 // @route   GET /api/groups/:id
 exports.getGroupById = async (req, res) => {
   try {
-    const group = await Group.findById(req.params.id).populate('members', 'name walletAddress');
+    const group = await Group.findById(req.params.id).lean();
     if (!group) return res.status(404).json({ success: false, error: 'Group not found' });
+    
+    // Fetch user objects for all members so frontend can display names and UIDs
+    const User = require('../models/User');
+    const memberUsers = await User.find({ walletAddress: { $in: group.members } }).lean();
+    
+    // Attach the fetched user objects to the response
+    group.populatedMembers = memberUsers;
     
     res.status(200).json({ success: true, data: group });
   } catch (error) {

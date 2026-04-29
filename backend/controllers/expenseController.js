@@ -1,50 +1,24 @@
-const mongoose = require('mongoose');
 const Expense = require('../models/Expense');
-const User = require('../models/User');
-
-const resolveUserId = async (userRef) => {
-  if (!userRef) {
-    throw new Error('User reference is required')
-  }
-
-  if (mongoose.Types.ObjectId.isValid(userRef)) {
-    return userRef
-  }
-
-  const user = await User.findOne({
-    $or: [
-      { name: userRef },
-      { walletAddress: String(userRef).toLowerCase() },
-    ],
-  })
-
-  if (!user) {
-    throw new Error(`User not found: ${userRef}`)
-  }
-
-  return user._id
-}
 
 // @desc    Create a new expense
 // @route   POST /api/expenses
 exports.createExpense = async (req, res) => {
   try {
-    const { title, amount, paidBy, groupId, participants } = req.body;
+    const { title, amount, category, paidBy, groupId, participants } = req.body;
 
-    const paidById = await resolveUserId(paidBy);
-    const splitEntries = Array.isArray(participants)
-      ? await Promise.all(participants.map(async (user) => ({
-          user: await resolveUserId(user),
+    const splitEntries = Array.isArray(participants) && participants.length > 0
+      ? participants.map(userWallet => ({
+          user: userWallet.toLowerCase(),
           amount: amount / participants.length,
-        })))
+        }))
       : [];
 
     const expense = await Expense.create({
       title,
       amount,
-      paidBy: paidById,
-      participants: splitEntries.map(entry => entry.user),
-      group: groupId,
+      category: category || '💸 General',
+      paidBy: paidBy.toLowerCase(),
+      group: groupId, // Note: group is still ObjectId in schema, but this is fine to map directly
       split: splitEntries,
     });
 
@@ -58,32 +32,36 @@ exports.createExpense = async (req, res) => {
 // @route   GET /api/expenses/group/:groupId
 exports.getGroupExpenses = async (req, res) => {
   try {
-    const expenses = await Expense.find({ group: req.params.groupId })
-      .populate('paidBy', 'name')
-      .populate('split.user', 'name');
-
+    const expenses = await Expense.find({ group: req.params.groupId }).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: expenses });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
   }
 };
 
-// @desc    Get all expenses
-// @route   GET /api/expenses
+// @desc    Get all expenses (for a specific user across all groups)
+// @route   GET /api/expenses?wallet=0x...
 exports.getExpenses = async (req, res) => {
   try {
-    const expenses = await Expense.find()
-      .populate('paidBy', 'name')
-      .populate('split.user', 'name')
-      .populate('group', 'name');
-
+    const wallet = req.query.wallet;
+    let query = {};
+    if (wallet) {
+      const lowerWallet = wallet.toLowerCase();
+      query = {
+        $or: [
+          { paidBy: lowerWallet },
+          { "split.user": lowerWallet }
+        ]
+      };
+    }
+    const expenses = await Expense.find(query).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: expenses });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
   }
 };
 
-// @desc    Mark expense as settled (links to Web3 txHash)
+// @desc    Mark expense as settled
 // @route   PUT /api/expenses/:id/settle
 exports.settleExpense = async (req, res) => {
   try {

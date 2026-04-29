@@ -20,9 +20,7 @@ export default function ConnectPage() {
     await connectWallet()
   }
 
-  const handleDemo = () => {
-    navigate('/dashboard')
-  }
+
 
   return (
     <div className="relative min-h-screen bg-vibe-bg bg-grid flex items-center justify-center px-6 overflow-hidden">
@@ -80,13 +78,9 @@ export default function ConnectPage() {
           {isConnecting ? '⏳ Connecting...' : '🦊 Connect MetaMask'}
         </button>
 
-        {/* Demo mode button */}
-        <button
-          className="btn-secondary w-full text-base py-3"
-          onClick={handleDemo}
-        >
-          👀 Continue in Demo Mode
-        </button>
+        <div className="mt-4 p-3 rounded-xl bg-vibe-purple/10 border border-vibe-purple/30 text-vibe-violet text-sm">
+           MetaMask is required to use SmartSplit.
+        </div>
 
         <p className="mt-4 text-xs text-gray-500">
           No MetaMask?{' '}

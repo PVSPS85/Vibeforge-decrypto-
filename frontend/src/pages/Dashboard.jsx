@@ -124,15 +124,10 @@ const TAG_EMOJIS = { Fun: '🎮', Home: '🏠', Travel: '✈️', Food: '🍕', 
 
 // ═══ MAIN DASHBOARD ═══
 export default function Dashboard() {
-  const { account } = useWeb3()
+  const { account, userProfile } = useWeb3()
   const navigate = useNavigate()
 
-  const [groups, setGroups] = useState(() => {
-    try {
-      const saved = localStorage.getItem('vibeforge_groups')
-      return saved ? JSON.parse(saved) : INITIAL_GROUPS
-    } catch { return INITIAL_GROUPS }
-  })
+  const [groups, setGroups] = useState([])
 
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
@@ -144,11 +139,68 @@ export default function Dashboard() {
   })
   const [mounted, setMounted] = useState(false)
 
-  // Clear old localStorage on first load
-  useEffect(() => { localStorage.clear() }, [])
-
   const maxXp = 3500
   const level = Math.floor(xp / 500) + 1
+
+  const [allExpenses, setAllExpenses] = useState([])
+
+  // Fetch Groups AND Expenses from backend
+  useEffect(() => {
+    if (!account) return
+    const fetchData = async () => {
+      try {
+        const [groupsRes, expRes] = await Promise.all([
+          fetch(`http://localhost:5005/api/groups?wallet=${account}`),
+          fetch(`http://localhost:5005/api/expenses?wallet=${account}`) // Fetch all expenses involving this user
+        ])
+        
+        const groupsData = await groupsRes.json()
+        const expData = await expRes.json()
+        
+        const expenses = expData.success ? expData.data : []
+        setAllExpenses(expenses)
+
+        if (groupsData.success) {
+          const formattedGroups = groupsData.data.map(g => {
+            // Calculate math for this specific group
+            const groupExps = expenses.filter(e => e.group === g._id)
+            let totalExp = 0
+            let yourBal = 0
+            
+            groupExps.forEach(exp => {
+              totalExp += exp.amount
+              const share = exp.amount / exp.split.length
+              
+              // If you paid, you get back everyone else's share
+              if (exp.paidBy.toLowerCase() === account.toLowerCase()) {
+                yourBal += (exp.amount - share)
+              } else {
+                // If someone else paid, and you are in the split, you owe your share
+                const inSplit = exp.split.find(s => s.user.toLowerCase() === account.toLowerCase())
+                if (inSplit) {
+                  yourBal -= share
+                }
+              }
+            })
+
+            return {
+              ...g,
+              id: g._id,
+              memberColors: g.members.map(() => 'bg-purple-500'),
+              totalExpense: totalExp,
+              settled: 0, // Pending on-chain settlement logic
+              yourBalance: yourBal,
+              memberCount: g.members.length > 1 ? g.members.length - 1 : 0
+            }
+          })
+          setGroups(formattedGroups)
+        }
+      } catch (err) {
+        console.error("Failed to fetch data", err)
+      }
+    }
+    fetchData()
+  }, [account])
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 100)
@@ -161,44 +213,46 @@ export default function Dashboard() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
   }
 
-  const handleCreateGroup = () => {
-    if (!groupName.trim()) return
-
-    if (Array.isArray(groups) && groups.find(g => g.name.toLowerCase() === groupName.trim().toLowerCase())) {
-      addToast({ type: 'error', icon: '⚠️', title: 'Group already exists!', sub: 'Choose a different name' })
-      return
-    }
+  const handleCreateGroup = async () => {
+    if (!groupName.trim() || !account) return
 
     const emoji = TAG_EMOJIS[groupTag] || '✨'
-    const newGroup = {
-      id: Date.now().toString(),
-      name: groupName.trim(),
-      emoji,
-      tag: groupTag,
-      tagColor: 'bg-cyan-500/20 text-cyan-300',
-      members: ['ME'],
-      memberColors: ['bg-purple-500'],
-      totalExpense: 0,
-      settled: 0,
-      yourBalance: 0,
-      memberCount: 1,
+    
+    try {
+      const res = await fetch('http://localhost:5005/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: groupName.trim(),
+          emoji,
+          tag: groupTag,
+          tagColor: 'bg-cyan-500/20 text-cyan-300',
+          adminWallet: account
+        })
+      })
+      
+      const data = await res.json()
+      if (data.success) {
+        const newGroup = {
+          ...data.data,
+          id: data.data._id,
+          memberColors: ['bg-purple-500'],
+          totalExpense: 0,
+          settled: 0,
+          yourBalance: 0,
+          memberCount: 0
+        }
+        
+        setGroups(prev => [newGroup, ...prev])
+        setGroupName('')
+        setShowNewGroup(false)
+        launchConfetti()
+        addToast({ type: 'success', icon: '🎉', title: 'Group Created!', sub: '+100 XP earned' })
+        setTimeout(() => addToast({ type: 'xp', icon: '⚡', title: 'XP Gained!', sub: 'Keep splitting to level up' }), 800)
+      }
+    } catch (err) {
+      addToast({ type: 'error', icon: '⚠️', title: 'Network Error', sub: 'Failed to create group' })
     }
-
-    setGroups(prev => {
-      const updated = [...prev, newGroup]
-      localStorage.setItem('vibeforge_groups', JSON.stringify(updated))
-      return updated
-    })
-
-    const newXp = xp + 100
-    setXp(newXp)
-    localStorage.setItem('vibeforge_xp', newXp.toString())
-
-    setGroupName('')
-    setShowNewGroup(false)
-    launchConfetti()
-    addToast({ type: 'success', icon: '🎉', title: 'Group Created!', sub: '+100 XP earned' })
-    setTimeout(() => addToast({ type: 'xp', icon: '⚡', title: 'XP Gained!', sub: 'Keep splitting to level up' }), 800)
   }
 
   const youOwe = useMemo(() => {
@@ -226,10 +280,17 @@ export default function Dashboard() {
                 ⚡ Lv.{level}
               </span>
             </div>
-            <p className="text-gray-400 text-sm">
-              {account
-                ? `🦊 ${account.slice(0, 6)}...${account.slice(-4)} · Your financial adventure`
-                : '👀 Demo Mode — Connect wallet to save data'}
+            <p className="text-gray-400 text-sm flex items-center gap-2 mt-1">
+              {userProfile ? (
+                <>
+                  <span className="font-bold text-white text-base">👋 {userProfile.displayName}</span>
+                  <span className="bg-vibe-purple/20 text-vibe-violet px-2 py-0.5 rounded text-xs font-mono border border-vibe-purple/30">
+                    {userProfile.appUid}
+                  </span>
+                </>
+              ) : (
+                <span className="opacity-50 text-xs">Loading Profile...</span>
+              )}
             </p>
           </div>
           <button
@@ -314,13 +375,23 @@ export default function Dashboard() {
                   </div>
 
                   <div className="flex gap-1 mb-3">
-                    {Array.isArray(group.members) && group.members.map((m, i) => (
+                    {Array.isArray(group.populatedMembers) ? group.populatedMembers.map((m, i) => (
                       <div
                         key={i}
                         className={`w-8 h-8 rounded-full ${group.memberColors[i] || 'bg-gray-600'} flex items-center justify-center text-xs font-bold text-white border-2 border-vibe-bg`}
                         style={{ marginLeft: i > 0 ? '-6px' : '0' }}
+                        title={`${m.displayName || 'Unknown User'} (${m.appUid || '???'})`}
                       >
-                        {m}
+                        {(m.displayName || 'U').slice(0, 2).toUpperCase()}
+                      </div>
+                    )) : Array.isArray(group.members) && group.members.map((m, i) => (
+                      <div
+                        key={i}
+                        className={`w-8 h-8 rounded-full ${group.memberColors[i] || 'bg-gray-600'} flex items-center justify-center text-xs font-bold text-white border-2 border-vibe-bg`}
+                        style={{ marginLeft: i > 0 ? '-6px' : '0' }}
+                        title="Unknown User"
+                      >
+                        U
                       </div>
                     ))}
                     <div
@@ -364,42 +435,30 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Leaderboard */}
+          {/* Leaderboard & Stats */}
           <div>
-            <h2 className="font-display text-xl font-bold text-white mb-4">🏆 Leaderboard</h2>
-            <div className="glass-card p-5 space-y-4">
-              {[
-                { initials: 'PS', name: 'Priya S', title: '⚡ Debt Crusher', xp: '2.8k', color: 'bg-pink-500', medal: '🥇' },
-                { initials: 'MR', name: 'Maya R', title: '🚀 Fast Payer', xp: '2.2k', color: 'bg-cyan-500', medal: '🥈' },
-                { initials: 'AK', name: 'Alex Kim', title: '🏆 Group Hero', xp: '2.0k', color: 'bg-orange-400', medal: '🥉' },
-                { initials: 'JT', name: 'Jordan T', title: '⭐ Rising Star', xp: '1.5k', color: 'bg-yellow-500', medal: '4' },
-              ].map((p, i) => (
-                <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-vibe-border/30 transition-all">
-                  <span className="text-lg w-6 text-center">{p.medal}</span>
-                  <div className={`w-9 h-9 rounded-full ${p.color} flex items-center justify-center text-xs font-bold text-white`}>
-                    {p.initials}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{p.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{p.title}</p>
-                  </div>
-                  <p className="text-sm font-bold text-vibe-violet font-mono">{p.xp}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="glass-card p-5 mt-4 space-y-3">
-              <p className="font-display font-bold text-white text-sm mb-2">📊 Your Stats</p>
+            <h2 className="font-display text-xl font-bold text-white mb-4">📊 Your Stats</h2>
+            
+            <div className="glass-card p-5 space-y-3 mb-6">
               {[
                 { label: 'Groups Joined', value: Array.isArray(groups) ? groups.length : 0, icon: '👥' },
+                { label: 'Total Expenses', value: Array.isArray(allExpenses) ? allExpenses.length : 0, icon: '🧾' },
                 { label: 'Total XP', value: xp.toLocaleString(), icon: '⚡' },
-                { label: 'Settled Bills', value: '12', icon: '✅' },
               ].map(s => (
                 <div key={s.label} className="flex items-center justify-between">
                   <span className="text-xs text-gray-400 flex items-center gap-2">{s.icon} {s.label}</span>
                   <span className="text-sm font-bold text-white">{s.value}</span>
                 </div>
               ))}
+            </div>
+
+            <h2 className="font-display text-xl font-bold text-white mb-4">🏆 Network Leaderboard</h2>
+            <div className="glass-card p-5 space-y-4">
+              <div className="text-center py-6 text-gray-500">
+                <p className="text-3xl mb-2">🚀</p>
+                <p className="text-sm">Leaderboard unlocks soon!</p>
+                <p className="text-xs mt-1">Keep splitting to rank up in the network.</p>
+              </div>
             </div>
           </div>
         </div>

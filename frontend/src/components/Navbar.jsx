@@ -1,12 +1,20 @@
+import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useWeb3 } from '../context/Web3Context'
 
 export default function Navbar() {
-  const { account, disconnectWallet } = useWeb3()
+  const { account, userProfile, disconnectWallet } = useWeb3()
   const navigate = useNavigate()
   const location = useLocation()
+  const [copied, setCopied] = useState(false)
 
-  const short = account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Demo'
+  const handleCopyUid = () => {
+    if (userProfile?.appUid) {
+      navigator.clipboard.writeText(userProfile.appUid)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
 
   const isActive = (path) => location.pathname === path
 
@@ -57,13 +65,36 @@ export default function Navbar() {
           <span className="text-xs text-vibe-violet font-bold">Lv.7</span>
         </div>
 
-        {/* Wallet address */}
+        {/* User Identity */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-vibe-card border border-vibe-border">
-          {/* Green dot */}
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-sm font-mono text-gray-300">
-            {account ? `🦊 ${short}` : '👀 Demo'}
-          </span>
+          {userProfile ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white">
+                {userProfile.displayName}
+              </span>
+              <span className="text-xs bg-vibe-purple/20 text-vibe-violet px-2 py-0.5 rounded font-mono border border-vibe-purple/30">
+                {userProfile.appUid}
+              </span>
+              <button 
+                onClick={handleCopyUid}
+                className="text-gray-400 hover:text-white transition-colors flex items-center justify-center relative"
+                title="Copy UID"
+              >
+                {copied ? (
+                  <span className="text-xs text-green-400 ml-1">Copied!</span>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          ) : (
+            <span className="text-sm font-mono text-gray-300">
+              {account ? 'Loading Profile...' : '👀 Demo'}
+            </span>
+          )}
         </div>
 
         {/* Disconnect */}
