@@ -29,8 +29,8 @@ export default function GroupPage() {
     const fetchGroupData = async () => {
       try {
         const [groupRes, expRes] = await Promise.all([
-          fetch(`http://localhost:5005/api/groups/${id}`),
-          fetch(`http://localhost:5005/api/expenses/group/${id}`)
+          fetch(`https://vibeforge-decrypto.onrender.com/api/groups/${id}`),
+          fetch(`https://vibeforge-decrypto.onrender.com/api/expenses/group/${id}`)
         ])
         
         const groupData = await groupRes.json()
@@ -140,7 +140,7 @@ export default function GroupPage() {
     const uid = newMemberName.trim().toUpperCase()
     
     try {
-      const res = await fetch(`http://localhost:5005/api/groups/${id}/members`, {
+      const res = await fetch(`https://vibeforge-decrypto.onrender.com/api/groups/${id}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appUid: uid })
@@ -148,7 +148,7 @@ export default function GroupPage() {
       const data = await res.json()
       if (data.success) {
         // Refresh the entire group to get the newly populated user object
-        const groupRes = await fetch(`http://localhost:5005/api/groups/${id}`)
+        const groupRes = await fetch(`https://vibeforge-decrypto.onrender.com/api/groups/${id}`)
         const refreshedData = await groupRes.json()
         if (refreshedData.success) {
            setMembers(refreshedData.data.populatedMembers || [])

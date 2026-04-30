@@ -10,7 +10,7 @@ function ProfileOnboardingModal({ walletAddress, onComplete }) {
     setSaving(true)
     try {
       // First try POST (creates new user or returns existing)
-      const res = await fetch('http://localhost:5005/api/users', {
+      const res = await fetch('https://vibeforge-decrypto.onrender.com/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), walletAddress })
@@ -20,7 +20,7 @@ function ProfileOnboardingModal({ walletAddress, onComplete }) {
         let profile = data.data
         // If user already existed, update their displayName via PUT
         if (!data.isNewUser) {
-          const putRes = await fetch(`http://localhost:5005/api/users/${walletAddress}`, {
+          const putRes = await fetch(`https://vibeforge-decrypto.onrender.com/api/users/${walletAddress}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ displayName: name.trim() })
@@ -90,7 +90,7 @@ export function Web3Provider({ children }) {
 
   const handleAuth = async (walletAddress) => {
     try {
-      const res = await fetch(`http://localhost:5005/api/users/${walletAddress}`)
+      const res = await fetch(`https://vibeforge-decrypto.onrender.com/api/users/${walletAddress}`)
       if (res.ok) {
         const data = await res.json()
         if (data.success) {
@@ -194,7 +194,7 @@ export function Web3Provider({ children }) {
     const addr = walletOverride || accountRef.current
     if (!addr) return
     try {
-      const res = await fetch(`http://localhost:5005/api/users/${addr}`)
+      const res = await fetch(`https://vibeforge-decrypto.onrender.com/api/users/${addr}`)
       const data = await res.json()
       if (data.success) setUserProfile(data.data)
     } catch (e) {

@@ -35,7 +35,7 @@ export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
     setLoading(true)
 
     try {
-      const res = await fetch('http://localhost:5005/api/expenses', {
+      const res = await fetch('https://vibeforge-decrypto.onrender.com/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

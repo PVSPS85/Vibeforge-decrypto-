@@ -146,7 +146,7 @@ export default function Dashboard() {
     if (!account) return
     const fetchData = async () => {
       try {
-        const groupsRes = await fetch(`http://localhost:5005/api/groups?wallet=${account}`)
+        const groupsRes = await fetch(`https://vibeforge-decrypto.onrender.com/api/groups?wallet=${account}`)
         const groupsData = await groupsRes.json()
         
         if (groupsData.success) {
@@ -154,7 +154,7 @@ export default function Dashboard() {
           const formattedGroups = await Promise.all(groupsData.data.map(async (g) => {
             
             // Fetch ALL expenses for this group to ensure math is 100% real
-            const expRes = await fetch(`http://localhost:5005/api/expenses/group/${g._id}`)
+            const expRes = await fetch(`https://vibeforge-decrypto.onrender.com/api/expenses/group/${g._id}`)
             const expData = await expRes.json()
             const groupExps = expData.success ? expData.data : []
             
@@ -216,7 +216,7 @@ export default function Dashboard() {
     const emoji = TAG_EMOJIS[groupTag] || '✨'
     
     try {
-      const res = await fetch('http://localhost:5005/api/groups', {
+      const res = await fetch('https://vibeforge-decrypto.onrender.com/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
