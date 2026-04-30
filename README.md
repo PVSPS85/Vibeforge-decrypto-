@@ -41,5 +41,8 @@ cd contracts
 npm install
 cp .env.example .env
 npx hardhat compile
+
+
+done project 
 npx hardhat run scripts/deploy.js --network localhost
 ```
