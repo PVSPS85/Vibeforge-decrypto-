@@ -124,7 +124,7 @@ const TAG_EMOJIS = { Fun: '🎮', Home: '🏠', Travel: '✈️', Food: '🍕', 
 
 // ═══ MAIN DASHBOARD ═══
 export default function Dashboard() {
-  const { account, userProfile } = useWeb3()
+  const { account, userProfile, refreshProfile } = useWeb3()
   const navigate = useNavigate()
 
   const [groups, setGroups] = useState([])
@@ -245,6 +245,7 @@ export default function Dashboard() {
         setShowNewGroup(false)
         launchConfetti()
         addToast({ type: 'success', icon: '🎉', title: 'Group Created!', sub: '+100 XP earned' })
+        refreshProfile()
         setTimeout(() => addToast({ type: 'xp', icon: '⚡', title: 'XP Gained!', sub: 'Keep splitting to level up' }), 800)
       }
     } catch (err) {

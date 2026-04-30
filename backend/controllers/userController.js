@@ -4,6 +4,17 @@ const generateUid = () => {
   return 'SS-' + Math.floor(1000 + Math.random() * 9000);
 }
 
+const ensureUniqueUid = async () => {
+  let isUnique = false;
+  let newUid;
+  while (!isUnique) {
+    newUid = generateUid();
+    const existing = await User.findOne({ appUid: newUid });
+    if (!existing) isUnique = true;
+  }
+  return newUid;
+}
+
 // @desc    Register a new user or get existing
 // @route   POST /api/users
 exports.registerUser = async (req, res) => {
@@ -13,16 +24,31 @@ exports.registerUser = async (req, res) => {
     let user = await User.findOne({ walletAddress: walletAddress.toLowerCase() });
 
     if (user) {
+      // If user exists but has old schema (missing appUid or displayName), repair it
+      let needsSave = false;
+
+      if (!user.appUid) {
+        user.appUid = await ensureUniqueUid();
+        needsSave = true;
+      }
+      if (!user.displayName && name) {
+        user.displayName = name;
+        needsSave = true;
+      }
+      // Migrate old 'name' field to 'displayName' if displayName is missing
+      if (!user.displayName && user.get('name')) {
+        user.displayName = user.get('name') !== 'User' ? user.get('name') : name || 'User';
+        needsSave = true;
+      }
+
+      if (needsSave) {
+        await user.save();
+      }
+
       return res.status(200).json({ success: true, data: user, isNewUser: false });
     }
 
-    let isUnique = false;
-    let newUid;
-    while (!isUnique) {
-      newUid = generateUid();
-      const existing = await User.findOne({ appUid: newUid });
-      if (!existing) isUnique = true;
-    }
+    const newUid = await ensureUniqueUid();
 
     user = await User.create({
       displayName: name,
@@ -74,6 +100,26 @@ exports.getUserByWallet = async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Auto-repair legacy users missing appUid or displayName
+    let needsSave = false;
+    if (!user.appUid) {
+      user.appUid = await ensureUniqueUid();
+      needsSave = true;
+    }
+    if (!user.displayName) {
+      // Migrate from old 'name' field if present
+      const oldName = user.get('name');
+      if (oldName && oldName !== 'User') {
+        user.displayName = oldName;
+      } else {
+        user.displayName = 'Unnamed';
+      }
+      needsSave = true;
+    }
+    if (needsSave) {
+      await user.save();
     }
 
     res.status(200).json({ success: true, data: user });

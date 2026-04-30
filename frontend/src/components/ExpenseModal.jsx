@@ -1,30 +1,21 @@
 import { useState } from 'react'
 
-const MEMBERS = [
-  { name: 'Pranav', initials: 'PR', color: 'bg-purple-500' },
-  { name: 'Rahul', initials: 'RA', color: 'bg-cyan-500' },
-  { name: 'Sneha', initials: 'SN', color: 'bg-pink-500' },
-  { name: 'Arjun', initials: 'AR', color: 'bg-yellow-500' },
-]
-
 const CATEGORIES = ['🍕 Food', '🏠 Home', '✈️ Travel', '🎮 Fun', '💡 Bills', '🛒 Shopping']
 const COLOR_OPTIONS = ['bg-purple-500', 'bg-cyan-500', 'bg-pink-500', 'bg-yellow-500', 'bg-green-500']
 
 export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
-  // Convert members prop to objects if provided, otherwise use fallback
-  const membersList = members && members.length > 0
-    ? members.map((userObj, index) => ({
-        name: userObj.displayName || 'Unknown',
-        walletAddress: userObj.walletAddress || `mock-${index}`,
-        initials: (userObj.displayName || 'U').slice(0, 2).toUpperCase(),
-        color: COLOR_OPTIONS[index % COLOR_OPTIONS.length]
-      }))
-    : MEMBERS
+  // Build membersList from the real group members — no hardcoded fallback
+  const membersList = (members || []).map((userObj, index) => ({
+    name: userObj.displayName || 'Unknown',
+    walletAddress: userObj.walletAddress || `unknown-${index}`,
+    initials: (userObj.displayName || 'U').slice(0, 2).toUpperCase(),
+    color: COLOR_OPTIONS[index % COLOR_OPTIONS.length]
+  }))
 
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
-  const [paidBy, setPaidBy] = useState(membersList[0]?.walletAddress || membersList[0]?.name)
-  const [splitAmong, setSplitAmong] = useState(membersList.map(m => m.walletAddress || m.name))
+  const [paidBy, setPaidBy] = useState(membersList[0]?.walletAddress || '')
+  const [splitAmong, setSplitAmong] = useState(membersList.map(m => m.walletAddress))
   const [category, setCategory] = useState('🍕 Food')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
@@ -68,6 +59,18 @@ export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  // If no real members are loaded yet, show a message instead of empty form
+  if (membersList.length === 0) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+        <div className="glass-card p-8 w-full max-w-md animate-slide-up text-center">
+          <p className="text-gray-400 text-sm mb-4">No members loaded yet. Add members to the group first!</p>
+          <button className="btn-secondary py-3 px-6" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -136,7 +139,7 @@ export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
               <label className="text-xs text-gray-400 mb-1.5 block font-semibold uppercase tracking-wide">Paid By</label>
               <div className="flex gap-2">
                 {membersList.map(m => {
-                  const id = m.walletAddress || m.name
+                  const id = m.walletAddress
                   const isSelected = paidBy === id
                   return (
                     <button
@@ -160,7 +163,7 @@ export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
               </label>
               <div className="flex gap-2">
                 {membersList.map(m => {
-                  const id = m.walletAddress || m.name
+                  const id = m.walletAddress
                   const isSelected = splitAmong.includes(id)
                   return (
                     <button
@@ -205,4 +208,3 @@ export default function ExpenseModal({ groupId, onAdded, onClose, members }) {
     </div>
   )
 }
-

@@ -8,11 +8,31 @@ export default function Navbar() {
   const location = useLocation()
   const [copied, setCopied] = useState(false)
 
-  const handleCopyUid = () => {
-    if (userProfile?.appUid) {
-      navigator.clipboard.writeText(userProfile.appUid)
+  const handleCopyUid = async () => {
+    const uid = userProfile?.appUid
+    if (!uid) return
+
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(uid)
+      } else {
+        // Fallback for non-HTTPS (localhost dev)
+        const textarea = document.createElement('textarea')
+        textarea.value = uid
+        textarea.style.position = 'fixed'
+        textarea.style.left = '-9999px'
+        textarea.style.top = '-9999px'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Copy failed:', err)
     }
   }
 
@@ -78,13 +98,13 @@ export default function Navbar() {
               </span>
               <button 
                 onClick={handleCopyUid}
-                className="text-gray-400 hover:text-white transition-colors flex items-center justify-center relative"
-                title="Copy UID"
+                className="ml-1 px-2 py-1 rounded-lg bg-vibe-purple/10 hover:bg-vibe-purple/30 border border-vibe-purple/20 hover:border-vibe-purple/50 text-gray-400 hover:text-white transition-all flex items-center justify-center"
+                title="Copy UID to clipboard"
               >
                 {copied ? (
-                  <span className="text-xs text-green-400 ml-1">Copied!</span>
+                  <span className="text-xs text-green-400 font-semibold whitespace-nowrap">✓ Copied</span>
                 ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                 )}

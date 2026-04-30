@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import ExpenseModal from '../components/ExpenseModal'
 import { useContract } from '../hooks/useContract'
+import { useWeb3 } from '../context/Web3Context'
 
 export default function GroupPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { refreshProfile } = useWeb3()
 
   const [showModal, setShowModal] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
@@ -49,6 +51,14 @@ export default function GroupPage() {
     fetchGroupData()
   }, [id])
 
+  // Helper: resolve a wallet address to a display name using the members list
+  const resolveWalletToName = (wallet) => {
+    if (!wallet) return 'Unknown'
+    const w = wallet.toLowerCase()
+    const found = members.find(m => m.walletAddress?.toLowerCase() === w)
+    return found?.displayName || `${w.slice(0, 6)}…${w.slice(-4)}`
+  }
+
   // Calculate balances dynamically from expenses
   const balances = (() => {
     const balanceMap = {}
@@ -63,7 +73,7 @@ export default function GroupPage() {
       const share = exp.amount / splitCount
       exp.split.forEach(person => {
         const personWallet = (person.user || person).toLowerCase()
-        const payerWallet = (exp.paidBy.walletAddress || exp.paidBy).toLowerCase()
+        const payerWallet = (exp.paidBy?.walletAddress || exp.paidBy).toLowerCase()
         
         if (personWallet !== payerWallet) {
           if (balanceMap[personWallet] !== undefined) {
@@ -98,12 +108,10 @@ export default function GroupPage() {
     setPaying(name)
     try {
       // Attempt blockchain settlement
-      // We pass the amount as a string/Wei roughly. If contract fails, app won't break.
       await settleDebt(id, name, amount.toString())
     } catch (err) {
       console.warn("Contract settlement skipped or failed:", err)
     }
-    // Simulate API success for demo purposes
     await new Promise(r => setTimeout(r, 1500))
     setPaying(null)
   }
@@ -111,7 +119,6 @@ export default function GroupPage() {
   const handleSettleAll = async () => {
     setPaying('all')
     try {
-      // You can loop over balances here to settle on chain when ready
       await new Promise(r => setTimeout(r, 2000))
     } catch (err) {
       console.warn("Contract settlement skipped")
@@ -124,6 +131,8 @@ export default function GroupPage() {
   const handleAddExpense = (newExpense) => {
     if (!newExpense) return
     setExpenses(prev => [newExpense, ...prev])
+    // Refresh profile to pick up new XP
+    refreshProfile()
   }
 
   const handleAddMember = async () => {
@@ -223,7 +232,9 @@ export default function GroupPage() {
               </div>
             ) : (
               expenses.map(exp => {
-                const paidByName = exp.paidBy?.name || exp.paidBy || 'Unknown'
+                // Resolve paidBy wallet address to a display name
+                const paidByWallet = exp.paidBy?.walletAddress || exp.paidBy || ''
+                const paidByName = resolveWalletToName(paidByWallet)
                 const dateLabel = exp.createdAt ? new Date(exp.createdAt).toLocaleDateString() : '—'
                 const itemCount = Array.isArray(exp.split) ? exp.split.length : 0
                 const perPerson = itemCount ? (exp.amount / itemCount).toFixed(0) : '0'
@@ -231,7 +242,7 @@ export default function GroupPage() {
                   <div key={exp._id} className="glass-card p-5 flex items-center justify-between hover:border-vibe-purple/40 transition-all">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-vibe-purple flex items-center justify-center text-xs font-bold text-white">
-                        {paidByName[0] || 'U'}
+                        {(paidByName[0] || 'U').toUpperCase()}
                       </div>
                       <div>
                         <p className="font-semibold text-white">{exp.title}</p>

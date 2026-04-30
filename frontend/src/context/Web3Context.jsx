@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { ethers } from 'ethers'
 
 function ProfileOnboardingModal({ walletAddress, onComplete }) {
@@ -9,6 +9,7 @@ function ProfileOnboardingModal({ walletAddress, onComplete }) {
     if (!name.trim()) return
     setSaving(true)
     try {
+      // First try POST (creates new user or returns existing)
       const res = await fetch('http://localhost:5005/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -16,7 +17,18 @@ function ProfileOnboardingModal({ walletAddress, onComplete }) {
       })
       const data = await res.json()
       if (data.success) {
-        onComplete(data.data)
+        let profile = data.data
+        // If user already existed, update their displayName via PUT
+        if (!data.isNewUser) {
+          const putRes = await fetch(`http://localhost:5005/api/users/${walletAddress}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ displayName: name.trim() })
+          })
+          const putData = await putRes.json()
+          if (putData.success) profile = putData.data
+        }
+        onComplete(profile)
       } else {
         alert(data.error)
       }
@@ -65,8 +77,16 @@ export function Web3Provider({ children }) {
   const [error, setError] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
   
+  // Keep a ref to the current wallet so refreshProfile never has stale closure
+  const accountRef = useRef(null)
+
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [pendingWallet, setPendingWallet] = useState(null)
+
+  // Sync accountRef whenever account changes
+  useEffect(() => {
+    accountRef.current = account
+  }, [account])
 
   const handleAuth = async (walletAddress) => {
     try {
@@ -74,11 +94,24 @@ export function Web3Provider({ children }) {
       if (res.ok) {
         const data = await res.json()
         if (data.success) {
-          setUserProfile(data.data)
+          const profile = data.data
+          // Check if user has a real display name or is a legacy/placeholder
+          const placeholders = ['unnamed', 'user', '']
+          const hasRealName = profile.displayName && !placeholders.includes(profile.displayName.toLowerCase().trim())
+          
+          if (hasRealName) {
+            setUserProfile(profile)
+            return
+          }
+          // Legacy user with placeholder name — let them set a real name
+          // Store the profile so the onboarding modal can update it
+          setUserProfile(profile)
+          setPendingWallet(walletAddress)
+          setNeedsOnboarding(true)
           return
         }
       }
-      // If user doesn't exist, prompt for name
+      // If user doesn't exist at all, prompt for name
       setPendingWallet(walletAddress)
       setNeedsOnboarding(true)
     } catch (err) {
@@ -118,7 +151,7 @@ export function Web3Provider({ children }) {
           setUserProfile(null)
         } else {
           setAccount(accounts[0])
-          // Don't auto fetch profile here, a reload is safer for dapp state
+          handleAuth(accounts[0])
         }
       })
     }
@@ -156,11 +189,24 @@ export function Web3Provider({ children }) {
     setUserProfile(null)
   }, [])
 
+  // Re-fetch user profile from backend (call after XP-granting actions)
+  const refreshProfile = useCallback(async (walletOverride) => {
+    const addr = walletOverride || accountRef.current
+    if (!addr) return
+    try {
+      const res = await fetch(`http://localhost:5005/api/users/${addr}`)
+      const data = await res.json()
+      if (data.success) setUserProfile(data.data)
+    } catch (e) {
+      console.warn('refreshProfile failed:', e)
+    }
+  }, [])
+
   return (
     <Web3Context.Provider value={{
       account, provider, signer,
       isConnecting, error, userProfile, setUserProfile,
-      connectWallet, disconnectWallet
+      connectWallet, disconnectWallet, refreshProfile
     }}>
       {children}
       {needsOnboarding && pendingWallet && (
