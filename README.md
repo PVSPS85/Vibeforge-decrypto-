@@ -17,7 +17,7 @@ PS 2: Split-the-Bill Smart Contract (DeFi)
 - `backend-dev` → backend/
 - `contract-dev` → contracts/
 
-## Running Locally
+
 
 ### Frontend
 ```bash
