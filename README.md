@@ -12,12 +12,6 @@ PS 2: Split-the-Bill Smart Contract (DeFi)
 - Blockchain: Solidity + Hardhat (EVM)
 - Wallet: MetaMask
 
-## Team Branches
-- `frontend-dev` → frontend/
-- `backend-dev` → backend/
-- `contract-dev` → contracts/
-
-
 
 ### Frontend
 ```bash
